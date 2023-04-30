@@ -35,6 +35,7 @@ builds:
 
 archives:
   - format: tar.gz
+    rlcp: true
     files:
       - none*
     name_template: >-
