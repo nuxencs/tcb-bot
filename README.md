@@ -1,6 +1,6 @@
 # tcb-bot
 
-A Discord bot to notifiy you about the lastest manga chapters released by TCB.
+A Discord bot to notify you about the latest manga chapters released by TCB.
 ```
 Usage:
 tcb-bot [flags]
