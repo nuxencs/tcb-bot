@@ -264,7 +264,7 @@ func main() {
 
 func PrintHelp() {
 	fmt.Printf(`
-A Discord bot to notify you about new TCB scanlation releases.
+A Discord bot to notifiy you about the lastest manga chapters released by TCB.
 
 Usage:
 tcb-bot [flags]
