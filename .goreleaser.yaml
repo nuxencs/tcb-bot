@@ -50,7 +50,7 @@ archives:
 release:
   prerelease: auto
   footer: |
-    **Full Changelog**: https://github.com/nuxen/tcb-bot/compare/{{ .PreviousTag }}...{{ .Tag }}
+    **Full Changelog**: https://github.com/nuxencs/tcb-bot/compare/{{ .PreviousTag }}...{{ .Tag }}
 
 checksum:
   name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
