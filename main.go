@@ -45,11 +45,21 @@ var (
 	help                      bool
 )
 
+var (
+	version     = "dev"
+	commit      = "none"
+	date        = "unknown"
+	showVersion bool
+)
+
 func init() {
 	flag.StringVar(&configFilePath, "config", configFilePath, "Path to the file where the watched mangas will be stored")
 	flag.StringVar(&configFilePath, "c", configFilePath, "Path to the file where the watched mangas will be stored (shorthand)")
+	flag.BoolVar(&showVersion, "version", false, "Show version information")
+	flag.BoolVar(&showVersion, "v", false, "Show version information (shorthand)")
 	flag.BoolVar(&help, "help", false, "Show help message")
 	flag.BoolVar(&help, "h", false, "Show help message (shorthand)")
+
 	flag.Parse()
 }
 
@@ -203,6 +213,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if showVersion {
+		fmt.Printf("tcb-bot v%s %s %s\n", version, commit, date)
+		os.Exit(1)
+	}
+
 	loadConfig(configFilePath)
 	loadCollectedChapters()
 	defer saveCollectedChapters()
@@ -256,6 +271,7 @@ tcb-bot [flags]
 
 Flags:
 -c, --config string    Specifies the path for the config file. Optional, default is same directory.
+-v,  --version         Displays the version and commit of the bot.
 -h,  --help            Displays this page.
 
 Configuration options:
