@@ -18,8 +18,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gocolly/colly"
-	_ "github.com/mattn/go-sqlite3"
 	"gopkg.in/yaml.v2"
+	_ "modernc.org/sqlite"
 )
 
 type Config struct {
@@ -35,9 +35,9 @@ const (
 )
 
 // Global variable to hold the database connection
-var db *sql.DB
 
 var (
+	db                        *sql.DB
 	collectedChapters         = make(map[string]bool)
 	collectedChaptersMutex    = &sync.RWMutex{} // Safe concurrent access
 	exePath, _                = os.Executable()
@@ -65,23 +65,14 @@ func init() {
 	flag.Parse()
 }
 
-func createDB() {
-	db, err := sql.Open("sqlite3", config.CollectedChaptersFilePath)
+func initDB() {
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(dirPath, "collected_chapters.db"))
 	if err != nil {
 		log.Fatalf("Error opening SQLite database: %v", err)
 	}
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			log.Fatalf("Error closing table: %v", err)
-		}
-	}(db)
-
-	// Create the table if it doesn't exist
-	sqlStmt := `
-    create table if not exists collectedChapters (mangaTitle text not null primary key);
-    `
-	_, err = db.Exec(sqlStmt)
+	// Create table if not exists
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS collected_chapters (manga_title TEXT PRIMARY KEY);`)
 	if err != nil {
 		log.Fatalf("Error creating table: %v", err)
 	}
@@ -135,7 +126,7 @@ func loadConfig(configFilePath string) {
 }
 
 func loadCollectedChapters() {
-	rows, err := db.Query("select mangaTitle from collectedChapters")
+	rows, err := db.Query(`SELECT manga_title FROM collected_chapters;`)
 	if err != nil {
 		log.Fatalf("Error loading collected chapters: %v", err)
 	}
@@ -145,40 +136,26 @@ func loadCollectedChapters() {
 			log.Fatalf("Error closing row: %v", err)
 		}
 	}(rows)
+
 	for rows.Next() {
 		var mangaTitle string
-		err = rows.Scan(&mangaTitle)
-		if err != nil {
+		if err := rows.Scan(&mangaTitle); err != nil {
 			log.Fatalf("Error scanning row: %v", err)
 		}
 		collectedChapters[mangaTitle] = true
 	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatalf("Error reading rows: %v", err)
+	}
 }
 
 func saveCollectedChapters() {
-	tx, err := db.Begin()
-	if err != nil {
-		log.Fatalf("Error beginning transaction: %v", err)
-	}
-	stmt, err := tx.Prepare("insert or ignore into collectedChapters(mangaTitle) values (?)")
-	if err != nil {
-		log.Fatalf("Error preparing statement: %v", err)
-	}
-	defer func(stmt *sql.Stmt) {
-		err := stmt.Close()
-		if err != nil {
-			log.Fatalf("Error closing statement: %v", err)
-		}
-	}(stmt)
 	for mangaTitle := range collectedChapters {
-		_, err = stmt.Exec(mangaTitle)
+		_, err := db.Exec(`INSERT OR IGNORE INTO collected_chapters (manga_title) VALUES (?);`, mangaTitle)
 		if err != nil {
-			log.Fatalf("Error executing statement: %v", err)
+			log.Fatalf("Error saving collected chapter: %v", err)
 		}
-	}
-	err = tx.Commit()
-	if err != nil {
-		log.Fatalf("Error committing transaction: %v", err)
 	}
 }
 
@@ -265,7 +242,15 @@ func main() {
 	}
 
 	loadConfig(configFilePath)
-	createDB()
+
+	initDB()
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+			log.Fatalf("Error closing database session: %v", err)
+		}
+	}(db)
+
 	loadCollectedChapters()
 	defer saveCollectedChapters()
 
