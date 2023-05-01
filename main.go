@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"log"
 	"os"
 	"os/signal"
@@ -20,6 +19,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/gocolly/colly"
 	"gopkg.in/yaml.v2"
+	_ "modernc.org/sqlite"
 )
 
 type Config struct {
@@ -30,21 +30,27 @@ type Config struct {
 	SleepTimer                int      `yaml:"sleepTimer"`
 }
 
+type ChapterInfo struct {
+	Collected bool
+	MangaLink string
+	TimeStr   string
+}
+
 const (
 	websiteURL = "https://onepiecechapters.com"
 )
 
 var (
-	collectedChapters         = make(map[string]bool)
+	db                        *sql.DB
+	collectedChapters         = make(map[string]ChapterInfo)
 	collectedChaptersMutex    = &sync.RWMutex{} // Safe concurrent access
 	exePath, _                = os.Executable()
 	dirPath                   = filepath.Dir(exePath)
 	configFilePath            = filepath.Join(dirPath, "config.yaml")
-	collectedChaptersFilePath = filepath.Join(dirPath, "collected_chapters.json")
+	collectedChaptersFilePath = filepath.Join(dirPath, "collected_chapters.db")
 	config                    Config
 	help                      bool
 )
-
 var (
 	version     = "dev"
 	commit      = "none"
@@ -61,6 +67,24 @@ func init() {
 	flag.BoolVar(&help, "h", false, "Show help message (shorthand)")
 
 	flag.Parse()
+}
+
+func initDB() {
+	var err error
+	db, err = sql.Open("sqlite", filepath.Join(dirPath, "collected_chapters.db"))
+	if err != nil {
+		log.Fatalf("Error opening SQLite database: %v", err)
+	}
+	// Create table if not exists
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS collected_chapters (
+            manga_title TEXT PRIMARY KEY, 
+            manga_link TEXT, 
+            time_str TEXT
+        );`)
+	if err != nil {
+		log.Fatalf("Error creating table: %v", err)
+	}
 }
 
 func loadConfig(configFilePath string) {
@@ -111,29 +135,45 @@ func loadConfig(configFilePath string) {
 }
 
 func loadCollectedChapters() {
-	if _, err := os.Stat(config.CollectedChaptersFilePath); os.IsNotExist(err) {
-		saveCollectedChapters()
-	}
-	data, err := os.ReadFile(config.CollectedChaptersFilePath)
+	rows, err := db.Query(`SELECT manga_title, manga_link, time_str FROM collected_chapters;`)
 	if err != nil {
 		log.Fatalf("Error loading collected chapters: %v", err)
 	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
+			log.Fatalf("Error closing row: %v", err)
+		}
+	}(rows)
 
-	err = json.Unmarshal(data, &collectedChapters)
-	if err != nil {
-		log.Fatalf("Error parsing collected chapters: %v", err)
+	for rows.Next() {
+		var mangaTitle, mangaLink, timeStr string
+		if err := rows.Scan(&mangaTitle, &mangaLink, &timeStr); err != nil {
+			log.Fatalf("Error scanning row: %v", err)
+		}
+		collectedChapters[mangaTitle] = ChapterInfo{
+			Collected: true,
+			MangaLink: mangaLink,
+			TimeStr:   timeStr,
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Fatalf("Error reading rows: %v", err)
 	}
 }
 
 func saveCollectedChapters() {
-	data, err := json.Marshal(collectedChapters)
-	if err != nil {
-		log.Fatalf("Error saving collected chapters: %v", err)
-	}
-
-	err = os.WriteFile(config.CollectedChaptersFilePath, data, fs.ModePerm)
-	if err != nil {
-		log.Fatalf("Error writing collected chapters: %v", err)
+	for mangaTitle, chapterInfo := range collectedChapters {
+		_, err := db.Exec(`
+            INSERT INTO collected_chapters (manga_title, manga_link, time_str) 
+            VALUES (?, ?, ?)
+            ON CONFLICT(manga_title) DO UPDATE 
+            SET manga_link = excluded.manga_link, time_str = excluded.time_str;`,
+			mangaTitle, chapterInfo.MangaLink, chapterInfo.TimeStr)
+		if err != nil {
+			log.Fatalf("Error saving collected chapter: %v", err)
+		}
 	}
 }
 
@@ -156,9 +196,14 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 			collectedChaptersMutex.RLock()
 			alreadyCollected := collectedChapters[mangaTitle]
 			collectedChaptersMutex.RUnlock()
-			if !alreadyCollected {
+			if !alreadyCollected.Collected {
 				collectedChaptersMutex.Lock()
-				collectedChapters[mangaTitle] = true
+				collectedChapters[mangaTitle] = ChapterInfo{
+					Collected: true,
+					MangaLink: mangaLink,
+					TimeStr:   timeStr,
+				}
+				saveCollectedChapters()
 				collectedChaptersMutex.Unlock()
 
 				// Format time to RFC1123 with CEST timezone
@@ -191,7 +236,6 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 				// Log that the chapter was already collected
 				log.Printf("%s was already collected, not sending notification.", mangaTitle)
 			}
-
 			break
 		}
 	}
@@ -220,6 +264,15 @@ func main() {
 	}
 
 	loadConfig(configFilePath)
+
+	initDB()
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+			log.Fatalf("Error closing database session: %v", err)
+		}
+	}(db)
+
 	loadCollectedChapters()
 	defer saveCollectedChapters()
 
