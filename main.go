@@ -71,7 +71,7 @@ func init() {
 
 func initDB() {
 	var err error
-	db, err = sql.Open("sqlite", filepath.Join(dirPath, "collected_chapters.db"))
+	db, err = sql.Open("sqlite", collectedChaptersFilePath)
 	if err != nil {
 		log.Fatalf("Error opening SQLite database: %v", err)
 	}
@@ -336,7 +336,7 @@ Flags:
 Configuration options:
   discordToken                 (Required) The token of the Discord bot you want to send the notifications with.
   discordChannelID             (Required) The ID of the Discord channel you want to send the notifications to.
-  collectedChaptersFilePath    (Optional) Path to the collectedChaptersFile. default: "collected_chapters.json"
+  collectedChaptersFilePath    (Optional) Path to the collectedChaptersFile. default: "collected_chapters.db"
   watchedMangas                (Optional) Mangas to monitor for new releases in list format. default: "One Piece"
   sleepTimer                   (Optional) Time to wait in minutes before checking for new chapters. default: 15
 
