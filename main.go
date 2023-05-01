@@ -116,28 +116,24 @@ func loadCollectedChapters() {
 	}
 	data, err := os.ReadFile(config.CollectedChaptersFilePath)
 	if err != nil {
-		log.Printf("Error loading collected chapters: %v", err)
-		return
+		log.Fatalf("Error loading collected chapters: %v", err)
 	}
 
 	err = json.Unmarshal(data, &collectedChapters)
 	if err != nil {
-		log.Printf("Error parsing collected chapters: %v", err)
-		return
+		log.Fatalf("Error parsing collected chapters: %v", err)
 	}
 }
 
 func saveCollectedChapters() {
 	data, err := json.Marshal(collectedChapters)
 	if err != nil {
-		log.Printf("Error saving collected chapters: %v", err)
-		return
+		log.Fatalf("Error saving collected chapters: %v", err)
 	}
 
 	err = os.WriteFile(config.CollectedChaptersFilePath, data, fs.ModePerm)
 	if err != nil {
-		log.Printf("Error writing collected chapters: %v", err)
-		return
+		log.Fatalf("Error writing collected chapters: %v", err)
 	}
 }
 
@@ -148,7 +144,7 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 	timeStr := e.ChildAttr("time-ago", "datetime")
 
 	if mangaLink == "" || mangaTitle == "" || chapterTitle == "" || timeStr == "" {
-		return
+		log.Fatal("Error finding values for mangaLink, mangaTitle, chapterTitle or timeStr")
 	}
 
 	// Unescape HTML entities
@@ -186,7 +182,7 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 					},
 				})
 				if err != nil {
-					log.Printf("Error sending Discord notification: %v", err)
+					log.Fatalf("Error sending Discord notification: %v", err)
 				} else {
 					// Log the notification
 					log.Printf("Notification sent for Chapter %s of %s.", chapter, manga)
