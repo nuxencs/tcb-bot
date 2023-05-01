@@ -24,7 +24,7 @@ require (
 require (
 	github.com/gocolly/colly v1.2.0
 	github.com/gorilla/websocket v1.4.2 // indirect
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
+	golang.org/x/crypto v0.1.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 )

@@ -31,7 +31,7 @@ builds:
     main: ./main.go
     binary: tcb-bot
     ldflags:
-    - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .CommitDate }}
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .CommitDate }}
 
 archives:
   - format: tar.gz
@@ -47,8 +47,8 @@ archives:
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
     format_overrides:
-    - goos: windows
-      format: zip
+      - goos: windows
+        format: zip
 
 release:
   prerelease: auto
