@@ -30,15 +30,19 @@ type Config struct {
 	SleepTimer                int      `yaml:"sleepTimer"`
 }
 
+type ChapterInfo struct {
+	Collected bool
+	MangaLink string
+	TimeStr   string
+}
+
 const (
 	websiteURL = "https://onepiecechapters.com"
 )
 
-// Global variable to hold the database connection
-
 var (
 	db                        *sql.DB
-	collectedChapters         = make(map[string]bool)
+	collectedChapters         = make(map[string]ChapterInfo)
 	collectedChaptersMutex    = &sync.RWMutex{} // Safe concurrent access
 	exePath, _                = os.Executable()
 	dirPath                   = filepath.Dir(exePath)
@@ -72,7 +76,12 @@ func initDB() {
 		log.Fatalf("Error opening SQLite database: %v", err)
 	}
 	// Create table if not exists
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS collected_chapters (manga_title TEXT PRIMARY KEY);`)
+	_, err = db.Exec(`
+        CREATE TABLE IF NOT EXISTS collected_chapters (
+            manga_title TEXT PRIMARY KEY, 
+            manga_link TEXT, 
+            time_str TEXT
+        );`)
 	if err != nil {
 		log.Fatalf("Error creating table: %v", err)
 	}
@@ -126,7 +135,7 @@ func loadConfig(configFilePath string) {
 }
 
 func loadCollectedChapters() {
-	rows, err := db.Query(`SELECT manga_title FROM collected_chapters;`)
+	rows, err := db.Query(`SELECT manga_title, manga_link, time_str FROM collected_chapters;`)
 	if err != nil {
 		log.Fatalf("Error loading collected chapters: %v", err)
 	}
@@ -138,11 +147,15 @@ func loadCollectedChapters() {
 	}(rows)
 
 	for rows.Next() {
-		var mangaTitle string
-		if err := rows.Scan(&mangaTitle); err != nil {
+		var mangaTitle, mangaLink, timeStr string
+		if err := rows.Scan(&mangaTitle, &mangaLink, &timeStr); err != nil {
 			log.Fatalf("Error scanning row: %v", err)
 		}
-		collectedChapters[mangaTitle] = true
+		collectedChapters[mangaTitle] = ChapterInfo{
+			Collected: true,
+			MangaLink: mangaLink,
+			TimeStr:   timeStr,
+		}
 	}
 
 	if err := rows.Err(); err != nil {
@@ -151,8 +164,13 @@ func loadCollectedChapters() {
 }
 
 func saveCollectedChapters() {
-	for mangaTitle := range collectedChapters {
-		_, err := db.Exec(`INSERT OR IGNORE INTO collected_chapters (manga_title) VALUES (?);`, mangaTitle)
+	for mangaTitle, chapterInfo := range collectedChapters {
+		_, err := db.Exec(`
+            INSERT INTO collected_chapters (manga_title, manga_link, time_str) 
+            VALUES (?, ?, ?)
+            ON CONFLICT(manga_title) DO UPDATE 
+            SET manga_link = excluded.manga_link, time_str = excluded.time_str;`,
+			mangaTitle, chapterInfo.MangaLink, chapterInfo.TimeStr)
 		if err != nil {
 			log.Fatalf("Error saving collected chapter: %v", err)
 		}
@@ -178,9 +196,13 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 			collectedChaptersMutex.RLock()
 			alreadyCollected := collectedChapters[mangaTitle]
 			collectedChaptersMutex.RUnlock()
-			if !alreadyCollected {
+			if !alreadyCollected.Collected {
 				collectedChaptersMutex.Lock()
-				collectedChapters[mangaTitle] = true
+				collectedChapters[mangaTitle] = ChapterInfo{
+					Collected: true,
+					MangaLink: mangaLink,
+					TimeStr:   timeStr,
+				}
 				saveCollectedChapters()
 				collectedChaptersMutex.Unlock()
 
