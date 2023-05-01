@@ -259,7 +259,7 @@ func main() {
 	defer func(db *sql.DB) {
 		err := db.Close()
 		if err != nil {
-
+			log.Fatalf("Error closing table: %v", err)
 		}
 	}(db)
 
