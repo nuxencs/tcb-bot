@@ -88,7 +88,12 @@ func loadConfig(configFilePath string) {
 			log.Fatalf("Error opening YAML file: %v", err)
 		}
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			log.Fatalf("Error closing YAML file: %v", err)
+		}
+	}(file)
 
 	data, err := os.ReadFile(configFilePath)
 	if err != nil {
@@ -258,7 +263,10 @@ func main() {
 		// Log release parsing
 		log.Println("Checking new releases for titles matching watched mangas...")
 
-		collector.Visit(websiteURL)
+		err := collector.Visit(websiteURL)
+		if err != nil {
+			log.Fatalf("Error visiting website: %v", err)
+		}
 	}
 }
 
