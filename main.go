@@ -1,11 +1,10 @@
 package main
 
 import (
-	"encoding/json"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"log"
 	"os"
 	"os/signal"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gocolly/colly"
+	_ "github.com/mattn/go-sqlite3"
 	"gopkg.in/yaml.v2"
 )
 
@@ -34,17 +34,19 @@ const (
 	websiteURL = "https://onepiecechapters.com"
 )
 
+// Global variable to hold the database connection
+var db *sql.DB
+
 var (
 	collectedChapters         = make(map[string]bool)
 	collectedChaptersMutex    = &sync.RWMutex{} // Safe concurrent access
 	exePath, _                = os.Executable()
 	dirPath                   = filepath.Dir(exePath)
 	configFilePath            = filepath.Join(dirPath, "config.yaml")
-	collectedChaptersFilePath = filepath.Join(dirPath, "collected_chapters.json")
+	collectedChaptersFilePath = filepath.Join(dirPath, "collected_chapters.db")
 	config                    Config
 	help                      bool
 )
-
 var (
 	version     = "dev"
 	commit      = "none"
@@ -111,32 +113,55 @@ func loadConfig(configFilePath string) {
 }
 
 func loadCollectedChapters() {
-	if _, err := os.Stat(config.CollectedChaptersFilePath); os.IsNotExist(err) {
-		saveCollectedChapters()
-	}
-	data, err := os.ReadFile(config.CollectedChaptersFilePath)
+	rows, err := db.Query("select mangaTitle from collectedChapters")
 	if err != nil {
 		log.Printf("Error loading collected chapters: %v", err)
 		return
 	}
+	defer func(rows *sql.Rows) {
+		err := rows.Close()
+		if err != nil {
 
-	err = json.Unmarshal(data, &collectedChapters)
-	if err != nil {
-		log.Printf("Error parsing collected chapters: %v", err)
-		return
+		}
+	}(rows)
+	for rows.Next() {
+		var mangaTitle string
+		err = rows.Scan(&mangaTitle)
+		if err != nil {
+			log.Printf("Error scanning row: %v", err)
+			return
+		}
+		collectedChapters[mangaTitle] = true
 	}
 }
 
 func saveCollectedChapters() {
-	data, err := json.Marshal(collectedChapters)
+	tx, err := db.Begin()
 	if err != nil {
-		log.Printf("Error saving collected chapters: %v", err)
+		log.Printf("Error beginning transaction: %v", err)
 		return
 	}
-
-	err = os.WriteFile(config.CollectedChaptersFilePath, data, fs.ModePerm)
+	stmt, err := tx.Prepare("insert or ignore into collectedChapters(mangaTitle) values (?)")
 	if err != nil {
-		log.Printf("Error writing collected chapters: %v", err)
+		log.Printf("Error preparing statement: %v", err)
+		return
+	}
+	defer func(stmt *sql.Stmt) {
+		err := stmt.Close()
+		if err != nil {
+			log.Fatalf("Error closing statement: %v", err)
+		}
+	}(stmt)
+	for mangaTitle := range collectedChapters {
+		_, err = stmt.Exec(mangaTitle)
+		if err != nil {
+			log.Printf("Error executing statement: %v", err)
+			return
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %v", err)
 		return
 	}
 }
@@ -163,6 +188,7 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 			if !alreadyCollected {
 				collectedChaptersMutex.Lock()
 				collectedChapters[mangaTitle] = true
+				saveCollectedChapters()
 				collectedChaptersMutex.Unlock()
 
 				// Format time to RFC1123 with CEST timezone
@@ -224,6 +250,28 @@ func main() {
 	}
 
 	loadConfig(configFilePath)
+
+	var err error
+	db, err = sql.Open("sqlite3", config.CollectedChaptersFilePath)
+	if err != nil {
+		log.Fatalf("Error opening SQLite database: %v", err)
+	}
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+
+		}
+	}(db)
+
+	// Create the table if it doesn't exist
+	sqlStmt := `
+    create table if not exists collectedChapters (mangaTitle text not null primary key);
+    `
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		log.Fatalf("Error creating table: %v", err)
+	}
+
 	loadCollectedChapters()
 	defer saveCollectedChapters()
 
@@ -249,7 +297,9 @@ func main() {
 		log.Println("Successfully created websocket connection.")
 	}
 
-	collector := colly.NewCollector()
+	collector := colly.NewCollector(
+		colly.AllowURLRevisit(),
+	)
 
 	collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
 		processHTMLElement(e, discord)
