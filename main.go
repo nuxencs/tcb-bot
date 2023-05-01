@@ -71,7 +71,7 @@ func init() {
 
 func initDB() {
 	var err error
-	db, err = sql.Open("sqlite", collectedChaptersFilePath)
+	db, err = sql.Open("sqlite", config.CollectedChaptersFilePath)
 	if err != nil {
 		log.Fatalf("Error opening SQLite database: %v", err)
 	}
