@@ -137,21 +137,19 @@ func loadConfig(configFilePath string) {
 func loadCollectedChapters() {
 	rows, err := db.Query("select mangaTitle from collectedChapters")
 	if err != nil {
-		log.Printf("Error loading collected chapters: %v", err)
-		return
+		log.Fatalf("Error loading collected chapters: %v", err)
 	}
 	defer func(rows *sql.Rows) {
 		err := rows.Close()
 		if err != nil {
-
+			log.Fatalf("Error closing row: %v", err)
 		}
 	}(rows)
 	for rows.Next() {
 		var mangaTitle string
 		err = rows.Scan(&mangaTitle)
 		if err != nil {
-			log.Printf("Error scanning row: %v", err)
-			return
+			log.Fatalf("Error scanning row: %v", err)
 		}
 		collectedChapters[mangaTitle] = true
 	}
@@ -160,13 +158,11 @@ func loadCollectedChapters() {
 func saveCollectedChapters() {
 	tx, err := db.Begin()
 	if err != nil {
-		log.Printf("Error beginning transaction: %v", err)
-		return
+		log.Fatalf("Error beginning transaction: %v", err)
 	}
 	stmt, err := tx.Prepare("insert or ignore into collectedChapters(mangaTitle) values (?)")
 	if err != nil {
-		log.Printf("Error preparing statement: %v", err)
-		return
+		log.Fatalf("Error preparing statement: %v", err)
 	}
 	defer func(stmt *sql.Stmt) {
 		err := stmt.Close()
@@ -177,14 +173,12 @@ func saveCollectedChapters() {
 	for mangaTitle := range collectedChapters {
 		_, err = stmt.Exec(mangaTitle)
 		if err != nil {
-			log.Printf("Error executing statement: %v", err)
-			return
+			log.Fatalf("Error executing statement: %v", err)
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
-		log.Printf("Error committing transaction: %v", err)
-		return
+		log.Fatalf("Error committing transaction: %v", err)
 	}
 }
 
@@ -195,7 +189,7 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 	timeStr := e.ChildAttr("time-ago", "datetime")
 
 	if mangaLink == "" || mangaTitle == "" || chapterTitle == "" || timeStr == "" {
-		return
+		log.Fatal("Error finding values for mangaLink, mangaTitle, chapterTitle or timeStr")
 	}
 
 	// Unescape HTML entities
@@ -234,7 +228,7 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 					},
 				})
 				if err != nil {
-					log.Printf("Error sending Discord notification: %v", err)
+					log.Fatalf("Error sending Discord notification: %v", err)
 				} else {
 					// Log the notification
 					log.Printf("Notification sent for Chapter %s of %s.", chapter, manga)
@@ -243,7 +237,6 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 				// Log that the chapter was already collected
 				log.Printf("%s was already collected, not sending notification.", mangaTitle)
 			}
-
 			break
 		}
 	}
