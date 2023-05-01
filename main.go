@@ -65,6 +65,28 @@ func init() {
 	flag.Parse()
 }
 
+func createDB() {
+	db, err := sql.Open("sqlite3", config.CollectedChaptersFilePath)
+	if err != nil {
+		log.Fatalf("Error opening SQLite database: %v", err)
+	}
+	defer func(db *sql.DB) {
+		err := db.Close()
+		if err != nil {
+			log.Fatalf("Error closing table: %v", err)
+		}
+	}(db)
+
+	// Create the table if it doesn't exist
+	sqlStmt := `
+    create table if not exists collectedChapters (mangaTitle text not null primary key);
+    `
+	_, err = db.Exec(sqlStmt)
+	if err != nil {
+		log.Fatalf("Error creating table: %v", err)
+	}
+}
+
 func loadConfig(configFilePath string) {
 	defaultConfig := Config{
 		CollectedChaptersFilePath: collectedChaptersFilePath,
@@ -250,28 +272,7 @@ func main() {
 	}
 
 	loadConfig(configFilePath)
-
-	var err error
-	db, err = sql.Open("sqlite3", config.CollectedChaptersFilePath)
-	if err != nil {
-		log.Fatalf("Error opening SQLite database: %v", err)
-	}
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			log.Fatalf("Error closing table: %v", err)
-		}
-	}(db)
-
-	// Create the table if it doesn't exist
-	sqlStmt := `
-    create table if not exists collectedChapters (mangaTitle text not null primary key);
-    `
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		log.Fatalf("Error creating table: %v", err)
-	}
-
+	createDB()
 	loadCollectedChapters()
 	defer saveCollectedChapters()
 
