@@ -249,7 +249,9 @@ func main() {
 		log.Println("Successfully created websocket connection.")
 	}
 
-	collector := colly.NewCollector()
+	collector := colly.NewCollector(
+		colly.AllowURLRevisit(),
+	)
 
 	collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
 		processHTMLElement(e, discord)
