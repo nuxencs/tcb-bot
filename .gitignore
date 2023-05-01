@@ -27,3 +27,4 @@ collected_chapters.json
 config.yaml
 tcb-bot
 *.sqlite
+*.db
