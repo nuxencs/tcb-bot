@@ -225,6 +225,7 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 					Footer: &discordgo.MessageEmbedFooter{
 						Text: "Released at " + formattedTime,
 					},
+					Color: 3447003,
 				})
 				if err != nil {
 					log.Fatalf("Error sending Discord notification: %v", err)
