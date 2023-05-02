@@ -6,6 +6,8 @@ import (
 	"flag"
 	"fmt"
 	"github.com/rs/zerolog"
+	"gopkg.in/natefinch/lumberjack.v2"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -14,12 +16,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rs/zerolog/log"
-	"html"
-
 	"github.com/bwmarrin/discordgo"
 	"github.com/gocolly/colly"
+	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
+	"html"
 	_ "modernc.org/sqlite"
 )
 
@@ -27,6 +28,9 @@ type Config struct {
 	DiscordToken              string   `yaml:"discordToken"`
 	DiscordChannelID          string   `yaml:"discordChannelID"`
 	CollectedChaptersFilePath string   `yaml:"collectedChaptersFilePath"`
+	LogPath                   string   `yaml:"logPath"`
+	LogMaxSize                int      `yaml:"logMaxSize"` // in megabytes
+	LogMaxBackups             int      `yaml:"logMaxBackups"`
 	WatchedMangas             []string `yaml:"watchedMangas"`
 	SleepTimer                int      `yaml:"sleepTimer"`
 }
@@ -56,6 +60,7 @@ var (
 	dirPath                   = filepath.Dir(exePath)
 	configFilePath            = filepath.Join(dirPath, "config.yaml")
 	collectedChaptersFilePath = filepath.Join(dirPath, "collected_chapters.db")
+	logPath                   = filepath.Join(dirPath, "tcb-bot.log")
 )
 
 var (
@@ -80,6 +85,25 @@ func init() {
 	zerolog.TimeFieldFormat = time.RFC3339
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	// log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+}
+
+func initLogger() {
+	var writers []io.Writer
+
+	if _, err := os.Stat(config.LogPath); os.IsNotExist(err) {
+		_, err = os.Create(config.LogPath)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error creating log file")
+		}
+	}
+	writers = append(writers, os.Stderr)
+	writers = append(writers, &lumberjack.Logger{
+		Filename:   config.LogPath,
+		MaxSize:    config.LogMaxSize, // megabytes
+		MaxBackups: config.LogMaxBackups,
+	})
+
+	log.Logger = zerolog.New(io.MultiWriter(writers...)).With().Timestamp().Stack().Logger()
 }
 
 func initDB() {
@@ -128,6 +152,9 @@ func loadConfig(configFilePath string) {
 	log.Debug().Msg("Setting default values")
 	defaultConfig := Config{
 		CollectedChaptersFilePath: collectedChaptersFilePath,
+		LogPath:                   logPath,
+		LogMaxSize:                10,
+		LogMaxBackups:             3,
 		WatchedMangas:             []string{"One Piece"},
 		SleepTimer:                15,
 	}
@@ -262,7 +289,6 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 					MangaLink: mangaLink,
 					TimeStr:   timeStr,
 				}
-				saveCollectedChapters()
 				collectedChaptersMutex.Unlock()
 
 				// Format time to RFC1123 with CEST timezone
@@ -287,10 +313,10 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 				if err != nil {
 					log.Fatal().Str("chapter", mangaTitle).Err(err).Msg("Error sending Discord notification")
 				}
-				log.Info().Str("manga", manga).Str("chapter", "Chapter "+chapter).Msg("Notification sent")
+				saveCollectedChapters()
+				log.Info().Str("chapter", mangaTitle).Msg("Notification sent")
 			} else {
-				log.Info().Str("manga", manga).Str("chapter", "Chapter "+chapter).
-					Msg("Notification was already sent, not sending")
+				log.Info().Str("chapter", mangaTitle).Msg("Notification was already sent, not sending")
 			}
 			break
 		}
@@ -323,8 +349,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Info().Msg("Starting the application")
 	loadConfig(configFilePath)
+	initLogger()
 	initDiscordBot()
 	initDB()
 	defer func(db *sql.DB) {
