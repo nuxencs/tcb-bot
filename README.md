@@ -1,14 +1,16 @@
 # tcb-bot
 
 A Discord bot to notify you about the latest manga chapters released by TCB.
+
 ```
 Usage:
 tcb-bot [flags]
 
 Flags:
-	-c,  --config string		Specifies the path for the config file. Optional, default is same directory.
-	-v,  --version				Displays the version and commit of the bot.
-	-h,  --help					Displays this page.
+	-c,  --config string		(Optional) Specifies the path for the config file. default: "config.yaml"
+	-v,  --version				(Optional) Displays version information.
+	-h,  --help					(Optional) Displays help message.
+	-d,  --debug				(Optional) Sets log level to debug.
 
 Configuration options:
 	discordToken				(Required) The token of the Discord bot you want to send the notifications with.
