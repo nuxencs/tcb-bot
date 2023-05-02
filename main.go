@@ -41,16 +41,21 @@ const (
 )
 
 var (
-	db                        *sql.DB
-	collectedChapters         = make(map[string]ChapterInfo)
-	collectedChaptersMutex    = &sync.RWMutex{} // Safe concurrent access
+	db                     *sql.DB
+	discord                *discordgo.Session
+	collectedChapters      = make(map[string]ChapterInfo)
+	collectedChaptersMutex = &sync.RWMutex{} // Safe concurrent access
+	config                 Config
+	help                   bool
+)
+
+var (
 	exePath, _                = os.Executable()
 	dirPath                   = filepath.Dir(exePath)
 	configFilePath            = filepath.Join(dirPath, "config.yaml")
 	collectedChaptersFilePath = filepath.Join(dirPath, "collected_chapters.db")
-	config                    Config
-	help                      bool
 )
+
 var (
 	version     = "dev"
 	commit      = "none"
@@ -84,6 +89,32 @@ func initDB() {
         );`)
 	if err != nil {
 		log.Fatalf("Error creating table: %v", err)
+	}
+}
+
+func initDiscordBot() {
+	var err error
+
+	// Log login attempt
+	log.Println("Logging in using the provided bot token...")
+
+	discord, err = discordgo.New("Bot " + config.DiscordToken)
+	if err != nil {
+		log.Fatalf("Error creating Discord session: %v", err)
+	} else {
+		// Log successful login
+		log.Println("Successfully logged in.")
+	}
+
+	// Log websocket creating attempt
+	log.Println("Creating websocket connection...")
+
+	err = discord.Open()
+	if err != nil {
+		log.Fatalf("Error opening Discord session: %v", err)
+	} else {
+		// Log websocket creating attempt
+		log.Println("Successfully created websocket connection.")
 	}
 }
 
@@ -265,7 +296,7 @@ func main() {
 	}
 
 	loadConfig(configFilePath)
-
+	initDiscordBot()
 	initDB()
 	defer func(db *sql.DB) {
 		err := db.Close()
@@ -273,31 +304,8 @@ func main() {
 			log.Fatalf("Error closing database session: %v", err)
 		}
 	}(db)
-
 	loadCollectedChapters()
 	defer saveCollectedChapters()
-
-	// Log login attempt
-	log.Println("Logging in using the provided bot token...")
-
-	discord, err := discordgo.New("Bot " + config.DiscordToken)
-	if err != nil {
-		log.Fatalf("Error creating Discord session: %v", err)
-	} else {
-		// Log successful login
-		log.Println("Successfully logged in.")
-	}
-
-	// Log websocket creating attempt
-	log.Println("Creating websocket connection...")
-
-	err = discord.Open()
-	if err != nil {
-		log.Fatalf("Error opening Discord session: %v", err)
-	} else {
-		// Log websocket creating attempt
-		log.Println("Successfully created websocket connection.")
-	}
 
 	collector := colly.NewCollector(
 		colly.AllowURLRevisit(),
