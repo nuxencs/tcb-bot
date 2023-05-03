@@ -84,7 +84,6 @@ func init() {
 
 	zerolog.TimeFieldFormat = time.RFC3339
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	// log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 }
 
 func initLogger() {
@@ -111,6 +110,7 @@ func initDB() {
 	log.Debug().Msg("Trying to open SQLite database")
 	db, err = sql.Open("sqlite", config.CollectedChaptersFilePath)
 	if err != nil {
+		sendDiscordNotificationOnError(err)
 		log.Fatal().Err(err).Msg("Error opening SQLite database")
 	}
 	log.Debug().Msg("Successfully opened SQLite database")
@@ -123,6 +123,7 @@ func initDB() {
             time_str TEXT
         );`)
 	if err != nil {
+		sendDiscordNotificationOnError(err)
 		log.Fatal().Err(err).Msg("Error creating table")
 	}
 	log.Debug().Msg("Successfully created table")
@@ -210,12 +211,14 @@ func loadCollectedChapters() {
 	log.Debug().Msg("Loading collected chapters")
 	rows, err := db.Query(`SELECT manga_title, manga_link, time_str FROM collected_chapters;`)
 	if err != nil {
+		sendDiscordNotificationOnError(err)
 		log.Fatal().Err(err).Msg("Error loading collected chapters")
 	}
 	defer func(rows *sql.Rows) {
 		log.Debug().Msg("Closing rows")
 		err := rows.Close()
 		if err != nil {
+			sendDiscordNotificationOnError(err)
 			log.Fatal().Err(err).Msg("Error closing rows")
 		}
 	}(rows)
@@ -224,6 +227,7 @@ func loadCollectedChapters() {
 	for rows.Next() {
 		var mangaTitle, mangaLink, timeStr string
 		if err := rows.Scan(&mangaTitle, &mangaLink, &timeStr); err != nil {
+			sendDiscordNotificationOnError(err)
 			log.Fatal().Err(err).Msg("Error scanning rows")
 		}
 		log.Debug().Str("chapter", mangaTitle).Msg("Updating collectedChapters[mangaTitle] with collected ChapterInfo")
@@ -236,6 +240,7 @@ func loadCollectedChapters() {
 
 	log.Debug().Msg("Reading rows")
 	if err := rows.Err(); err != nil {
+		sendDiscordNotificationOnError(err)
 		log.Fatal().Err(err).Msg("Error reading rows")
 	}
 }
@@ -250,8 +255,30 @@ func saveCollectedChapters() {
             SET manga_link = excluded.manga_link, time_str = excluded.time_str;`,
 			mangaTitle, chapterInfo.MangaLink, chapterInfo.TimeStr)
 		if err != nil {
+			sendDiscordNotificationOnError(err)
 			log.Fatal().Str("chapter", mangaTitle).Err(err).Msg("Error saving collected chapter")
 		}
+	}
+}
+
+func sendDiscordNotificationOnError(err error) {
+	t := time.Now()
+
+	// Convert to a specific time zone.
+	location, _ := time.LoadLocation("Europe/Berlin") // Use the correct location here.
+	t = t.In(location)
+	formattedTime := t.Format(time.RFC1123)
+
+	_, e := discord.ChannelMessageSendEmbed(config.DiscordChannelID, &discordgo.MessageEmbed{
+		Title:       "Fatal error",
+		Description: fmt.Sprintf("%v\n", err),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: "Error occurred at " + formattedTime,
+		},
+		Color: 15548997,
+	})
+	if e != nil {
+		log.Fatal().Err(e).Msg("Error sending Discord notification")
 	}
 }
 
@@ -357,6 +384,7 @@ func main() {
 		log.Debug().Msg("Closing database session")
 		err := db.Close()
 		if err != nil {
+			sendDiscordNotificationOnError(err)
 			log.Fatal().Err(err).Msg("Error closing database session")
 		}
 	}(db)
@@ -381,6 +409,7 @@ func main() {
 		log.Info().Msg("Checking new releases for titles matching watched mangas...")
 		err := collector.Visit(websiteURL)
 		if err != nil {
+			sendDiscordNotificationOnError(err)
 			log.Fatal().Err(err).Msg("Error visiting website")
 		}
 	}
