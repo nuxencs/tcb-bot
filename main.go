@@ -269,7 +269,7 @@ func sendDiscordNotificationOnError(err error) {
 	t = t.In(location)
 	formattedTime := t.Format(time.RFC1123)
 
-	log.Debug().Msg("Sending Discord error notification")
+	log.Debug().Msg("Sending Discord notification for occurring error")
 	_, e := discord.ChannelMessageSendEmbed(config.DiscordChannelID, &discordgo.MessageEmbed{
 		Title:       "Fatal error",
 		Description: fmt.Sprintf("%v\n", err),
