@@ -275,7 +275,7 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 
 	log.Debug().Msg("Iterating over watched mangas")
 	for _, m := range config.WatchedMangas {
-		log.Debug().Str("chapter", mangaTitle).Msg("Checking if chapter contained in watched mangas")
+		log.Debug().Str("chapter", mangaTitle).Msgf("Checking if chapter contains %s", m)
 		if strings.Contains(mangaTitle, m) {
 			collectedChaptersMutex.RLock()
 			alreadyCollected := collectedChapters[mangaTitle]
