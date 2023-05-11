@@ -56,11 +56,11 @@ var (
 )
 
 var (
-	exePath, _                = os.Executable()
-	dirPath                   = filepath.Dir(exePath)
-	configFilePath            = filepath.Join(dirPath, "config.yaml")
-	collectedChaptersFilePath = filepath.Join(dirPath, "collected_chapters.db")
-	logPath                   = filepath.Join(dirPath, "tcb-bot.log")
+	userConfigDir, _          = os.UserConfigDir()
+	configPath                = filepath.Join(userConfigDir, "tcb-bot")
+	configFilePath            = filepath.Join(configPath, "config.yaml")
+	collectedChaptersFilePath = filepath.Join(configPath, "collected_chapters.db")
+	logPath                   = filepath.Join(configPath, "logs", "tcb-bot.log")
 )
 
 var (
@@ -91,6 +91,11 @@ func initLogger() {
 	var writers []io.Writer
 
 	if _, err := os.Stat(config.LogPath); os.IsNotExist(err) {
+		log.Debug().Msg("Creating log directory if it doesn't exist")
+		err = os.MkdirAll(filepath.Dir(config.LogPath), os.ModePerm)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Error creating log directory")
+		}
 		_, err = os.Create(config.LogPath)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Error creating log file")
@@ -163,6 +168,11 @@ func loadConfig(configFilePath string) {
 	file, err := os.Open(configFilePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			log.Debug().Msg("Creating config directory if it doesn't exist")
+			err = os.MkdirAll(filepath.Dir(configFilePath), os.ModePerm)
+			if err != nil {
+				log.Fatal().Err(err).Msg("Error creating config directory")
+			}
 			log.Debug().Msg("Creating config file because it doesn't exist")
 			file, err = os.Create(configFilePath)
 			if err != nil {
