@@ -42,7 +42,7 @@ type ChapterInfo struct {
 }
 
 const (
-	websiteURL = "https://onepiecechapters.com"
+	websiteURL = "https://tcbscans.com"
 )
 
 var (
