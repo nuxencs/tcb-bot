@@ -311,18 +311,8 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 
 				// Send notification to Discord
 				log.Debug().Str("chapter", mangaTitle).Msg("Sending notification to discord")
-				_, err := discord.ChannelMessageSendEmbed(config.DiscordChannelID, &discordgo.MessageEmbed{
-					Title:       manga,
-					Description: fmt.Sprintf("Chapter %s: %s\n", chapter, chapterTitle),
-					URL:         websiteURL + mangaLink,
-					Footer: &discordgo.MessageEmbedFooter{
-						Text: "Released at " + formattedTime,
-					},
-					Color: 3447003,
-				})
-				if err != nil {
-					log.Fatal().Str("chapter", mangaTitle).Err(err).Msg("Error sending Discord notification")
-				}
+				sendDiscordNotification(manga, fmt.Sprintf("Chapter %s: %s\n", chapter, chapterTitle),
+					websiteURL+mangaLink, "Released at "+formattedTime, 3447003)
 				saveCollectedChapters()
 				log.Info().Str("chapter", mangaTitle).Msg("Notification sent")
 			} else {
@@ -330,6 +320,21 @@ func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
 			}
 			break
 		}
+	}
+}
+
+func sendDiscordNotification(title string, description string, url string, footer string, color int) {
+	_, err := discord.ChannelMessageSendEmbed(config.DiscordChannelID, &discordgo.MessageEmbed{
+		Title:       title,
+		Description: description,
+		URL:         url,
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: footer,
+		},
+		Color: color,
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Error sending Discord notification")
 	}
 }
 
@@ -378,6 +383,8 @@ func main() {
 		colly.AllowURLRevisit(),
 	)
 
+	collector.SetRequestTimeout(120 * time.Second)
+
 	collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
 		processHTMLElement(e, discord)
 	})
@@ -391,7 +398,9 @@ func main() {
 		log.Info().Msg("Checking new releases for titles matching watched mangas...")
 		err := collector.Visit(websiteURL)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Error visiting website")
+			log.Error().Err(err).Msg("Error visiting website, trying again in the next cycle")
+			sendDiscordNotification("Error visiting website", fmt.Sprintf("%s", err), "",
+				"", 10038562)
 		}
 	}
 }
