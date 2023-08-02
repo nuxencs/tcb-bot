@@ -378,6 +378,8 @@ func main() {
 		colly.AllowURLRevisit(),
 	)
 
+	collector.SetRequestTimeout(120 * time.Second)
+
 	collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
 		processHTMLElement(e, discord)
 	})
@@ -391,7 +393,7 @@ func main() {
 		log.Info().Msg("Checking new releases for titles matching watched mangas...")
 		err := collector.Visit(websiteURL)
 		if err != nil {
-			log.Fatal().Err(err).Msg("Error visiting website")
+			log.Error().Err(err).Msg("Error visiting website, trying again in the next cycle")
 		}
 	}
 }
