@@ -16,7 +16,7 @@ builds:
       - arm
       - arm64
     goarm:
-      - 6
+      - "6"
     ignore:
       - goos: windows
         goarch: arm
@@ -28,24 +28,24 @@ builds:
         goarch: arm
       - goos: freebsd
         goarch: arm64
-    main: ./main.go
+    main: ./cmd/tcb-bot/main.go
     binary: tcb-bot
-    ldflags:
-      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }} -X main.date={{ .CommitDate }}
 
 archives:
-  - format: tar.gz
-    rlcp: true
+  - id: tcb-bot
+    builds:
+      - tcb-bot
+    format_overrides:
+      - goos: windows
+        format: zip
     files:
       - none*
     name_template: >-
       {{ .ProjectName }}_
-      {{- trim .Version }}_
-      {{- tolower .Os }}_
+      {{- .Version }}_
+      {{- .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
-      {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
-      {{- if .Arm }}v{{ .Arm }}{{ end }}
 
 release:
   prerelease: auto

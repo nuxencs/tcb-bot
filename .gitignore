@@ -23,8 +23,3 @@ go.work
 # Additional files
 .idea/
 dist/
-collected_chapters.json
-config.yaml
-tcb-bot
-*.sqlite
-*.db
