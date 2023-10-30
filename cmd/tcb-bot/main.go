@@ -23,6 +23,7 @@ import (
 	"github.com/gocolly/colly"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/pflag"
 )
 
 type Config struct {
@@ -72,14 +73,10 @@ var (
 )
 
 func init() {
-	flag.StringVar(&configFilePath, "config", configFilePath, "Specifies the path for the config file.")
-	flag.StringVar(&configFilePath, "c", configFilePath, "Specifies the path for the config file (shorthand)")
-	flag.BoolVar(&showVersion, "version", false, "Displays version information")
-	flag.BoolVar(&showVersion, "v", false, "Displays version information (shorthand)")
-	flag.BoolVar(&help, "help", false, "Displays help message")
-	flag.BoolVar(&help, "h", false, "Displays help message (shorthand)")
-	flag.BoolVar(&debug, "debug", false, "Sets log level to debug")
-	flag.BoolVar(&debug, "d", false, "Sets log level to debug (shorthand)")
+	pflag.StringVarP(&configFilePath, "config", "c", configFilePath, "Specifies the path for the config file.")
+	pflag.BoolVarP(&showVersion, "version", "v", false, "Displays version information")
+	pflag.BoolVarP(&help, "help", "h", false, "Displays help message")
+	pflag.BoolVarP(&debug, "debug", "d", false, "Sets log level to debug")
 
 	flag.Parse()
 
