@@ -352,6 +352,34 @@ func sendDiscordNotification(title string, description string, url string, foote
 	}
 }
 
+func startCollector() {
+	log.Debug().Msg("Creating new collector")
+	collector := colly.NewCollector(
+		colly.AllowURLRevisit(),
+	)
+
+	collector.SetRequestTimeout(120 * time.Second)
+
+	collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
+		processHTMLElement(e)
+	})
+
+	log.Debug().Msg("Creating new ticker")
+	ticker := time.NewTicker(time.Duration(config.SleepTimer) * time.Minute)
+	defer ticker.Stop()
+
+	// Using for range loop over ticker.C
+	for range ticker.C {
+		log.Info().Msg("Checking new releases for titles matching watched mangas...")
+		err := collector.Visit(websiteURL)
+		if err != nil {
+			log.Error().Err(err).Msg("Error visiting website, trying again in the next cycle")
+			sendDiscordNotification("Error visiting website", fmt.Sprintf("%s", err), "",
+				"", 10038562)
+		}
+	}
+}
+
 func main() {
 	// Set up a channel to catch signals for graceful shutdown
 	sigCh := make(chan os.Signal, 1)
@@ -419,32 +447,7 @@ func main() {
 		}(db)
 		loadCollectedChapters()
 		defer saveCollectedChapters()
-
-		log.Debug().Msg("Creating new collector")
-		collector := colly.NewCollector(
-			colly.AllowURLRevisit(),
-		)
-
-		collector.SetRequestTimeout(120 * time.Second)
-
-		collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
-			processHTMLElement(e)
-		})
-
-		log.Debug().Msg("Creating new ticker")
-		ticker := time.NewTicker(time.Duration(config.SleepTimer) * time.Minute)
-		defer ticker.Stop()
-
-		// Using for range loop over ticker.C
-		for range ticker.C {
-			log.Info().Msg("Checking new releases for titles matching watched mangas...")
-			err := collector.Visit(websiteURL)
-			if err != nil {
-				log.Error().Err(err).Msg("Error visiting website, trying again in the next cycle")
-				sendDiscordNotification("Error visiting website", fmt.Sprintf("%s", err), "",
-					"", 10038562)
-			}
-		}
+		startCollector()
 
 	default:
 		pflag.Usage()
