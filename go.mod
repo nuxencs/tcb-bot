@@ -6,6 +6,7 @@ require (
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/rs/zerolog v1.29.1
 	github.com/spf13/pflag v1.0.5
+	go.etcd.io/bbolt v1.3.8
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.22.1
 )

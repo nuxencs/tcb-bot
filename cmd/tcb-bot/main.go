@@ -1,9 +1,9 @@
 package main
 
 import (
-	"database/sql"
+	"bytes"
+	"encoding/gob"
 	"errors"
-	"flag"
 	"fmt"
 	"html"
 	"io"
@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	bolt "go.etcd.io/bbolt"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v2"
 	_ "modernc.org/sqlite"
@@ -48,12 +49,11 @@ const (
 )
 
 var (
-	db                     *sql.DB
+	db                     *bolt.DB
 	discord                *discordgo.Session
 	collectedChapters      = make(map[string]ChapterInfo)
 	collectedChaptersMutex = &sync.RWMutex{} // Safe concurrent access
 	config                 Config
-	help                   bool
 	debug                  bool
 )
 
@@ -66,19 +66,45 @@ var (
 )
 
 var (
-	version     = "dev"
-	commit      = "none"
-	date        = "unknown"
-	showVersion bool
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
 )
 
+const usage = `A Discord bot to notify you about the latest manga chapters released by TCB.
+
+Usage:
+  tcb-bot [command] [flags]
+
+Commands:
+  start          Start tcb-bot
+  version        Print version info
+  help           Show this help message
+
+Flags:
+  -c,  --config <path>          (Optional) Specifies the path for the config file. default: "config.yaml"
+  -d,  --debug                  (Optional) Sets log level to debug.
+
+Configuration options:
+  discordToken                  (Required) The token of the Discord bot you want to send the notifications with.
+  discordChannelID              (Required) The ID of the Discord channel you want to send the notifications to.
+  collectedChaptersFilePath     (Optional) Path to the collectedChaptersFile. default: "collected_chapters.db"
+  logPath                       (Optional) Path to the log file. default: "tcb-bot.log"
+  logMaxSize                    (Optional) Max size in MB for log file before rotating. default: 10MB
+  logMaxBackups                 (Optional) Max log backups to keep before deleting old logs. default: 3
+  watchedMangas                 (Optional) Mangas to monitor for new releases in list format. default: "One Piece"
+  sleepTimer                    (Optional) Time to wait in minutes before checking for new chapters. default: 15
+` + "\n"
+
 func init() {
+	pflag.Usage = func() {
+		fmt.Print(usage)
+	}
+
 	pflag.StringVarP(&configFilePath, "config", "c", configFilePath, "Specifies the path for the config file.")
-	pflag.BoolVarP(&showVersion, "version", "v", false, "Displays version information")
-	pflag.BoolVarP(&help, "help", "h", false, "Displays help message")
 	pflag.BoolVarP(&debug, "debug", "d", false, "Sets log level to debug")
 
-	flag.Parse()
+	pflag.Parse()
 
 	zerolog.TimeFieldFormat = time.RFC3339
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
@@ -111,24 +137,22 @@ func initLogger() {
 
 func initDB() {
 	var err error
-	log.Debug().Msg("Trying to open SQLite database")
-	db, err = sql.Open("sqlite", config.CollectedChaptersFilePath)
+	log.Debug().Msg("Trying to open bolt database")
+	db, err = bolt.Open(config.CollectedChaptersFilePath, 0600, nil)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error opening SQLite database")
+		log.Fatal().Err(err).Msg("Error opening bolt database")
 	}
-	log.Debug().Msg("Successfully opened SQLite database")
-	log.Debug().Msg("Trying to create table if it doesn't exist")
-	// Create table if not exists
-	_, err = db.Exec(`
-        CREATE TABLE IF NOT EXISTS collected_chapters (
-            manga_title TEXT PRIMARY KEY, 
-            manga_link TEXT, 
-            time_str TEXT
-        );`)
+	log.Debug().Msg("Successfully opened bolt database")
+	log.Debug().Msg("Trying to create bucket if it doesn't exist")
+	// Create bucket if not exists
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("collected_chapters"))
+		return err
+	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("Error creating table")
+		log.Fatal().Err(err).Msg("Error creating bucket")
 	}
-	log.Debug().Msg("Successfully created table")
+	log.Debug().Msg("Successfully created bucket")
 }
 
 func initDiscordBot() {
@@ -216,54 +240,44 @@ func loadConfig(configFilePath string) {
 
 func loadCollectedChapters() {
 	log.Debug().Msg("Loading collected chapters")
-	rows, err := db.Query(`SELECT manga_title, manga_link, time_str FROM collected_chapters;`)
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("collected_chapters"))
+		c := b.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var chapterInfo ChapterInfo
+			dec := gob.NewDecoder(bytes.NewReader(v))
+			if err := dec.Decode(&chapterInfo); err != nil {
+				return err
+			}
+			mangaTitle := string(k)
+			collectedChapters[mangaTitle] = chapterInfo
+		}
+		return nil
+	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Error loading collected chapters")
-	}
-	defer func(rows *sql.Rows) {
-		log.Debug().Msg("Closing rows")
-		err := rows.Close()
-		if err != nil {
-			log.Fatal().Err(err).Msg("Error closing rows")
-		}
-	}(rows)
-
-	log.Debug().Msg("Scanning rows")
-	for rows.Next() {
-		var mangaTitle, mangaLink, timeStr string
-		if err := rows.Scan(&mangaTitle, &mangaLink, &timeStr); err != nil {
-			log.Fatal().Err(err).Msg("Error scanning rows")
-		}
-		log.Debug().Str("chapter", mangaTitle).Msg("Updating collectedChapters[mangaTitle] with collected ChapterInfo")
-		collectedChapters[mangaTitle] = ChapterInfo{
-			Collected: true,
-			MangaLink: mangaLink,
-			TimeStr:   timeStr,
-		}
-	}
-
-	log.Debug().Msg("Reading rows")
-	if err := rows.Err(); err != nil {
-		log.Fatal().Err(err).Msg("Error reading rows")
 	}
 }
 
 func saveCollectedChapters() {
 	for mangaTitle, chapterInfo := range collectedChapters {
 		log.Debug().Str("chapter", mangaTitle).Msg("Saving collected chapter")
-		_, err := db.Exec(`
-            INSERT INTO collected_chapters (manga_title, manga_link, time_str) 
-            VALUES (?, ?, ?)
-            ON CONFLICT(manga_title) DO UPDATE 
-            SET manga_link = excluded.manga_link, time_str = excluded.time_str;`,
-			mangaTitle, chapterInfo.MangaLink, chapterInfo.TimeStr)
+		err := db.Update(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte("collected_chapters"))
+			buf := new(bytes.Buffer)
+			enc := gob.NewEncoder(buf)
+			if err := enc.Encode(chapterInfo); err != nil {
+				return err
+			}
+			return b.Put([]byte(mangaTitle), buf.Bytes())
+		})
 		if err != nil {
 			log.Fatal().Str("chapter", mangaTitle).Err(err).Msg("Error saving collected chapter")
 		}
 	}
 }
 
-func processHTMLElement(e *colly.HTMLElement, discord *discordgo.Session) {
+func processHTMLElement(e *colly.HTMLElement) {
 	mangaLink := e.ChildAttr("a.text-white.text-lg.font-bold", "href")
 	mangaTitle := e.ChildText("a.text-white.text-lg.font-bold")
 	chapterTitle := e.ChildText("div.mb-3 > div")
@@ -338,93 +352,71 @@ func sendDiscordNotification(title string, description string, url string, foote
 
 func main() {
 	// Set up a channel to catch signals for graceful shutdown
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
-	// Save collected chapters and exit on signal
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL, syscall.SIGTERM)
 	go func() {
-		<-c
+		<-sigCh
 		saveCollectedChapters()
-		os.Exit(0)
+		os.Exit(1)
 	}()
 
 	if debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	if help {
-		PrintHelp()
-		os.Exit(1)
-	}
-
-	if showVersion {
+	switch cmd := pflag.Arg(0); cmd {
+	case "version":
 		fmt.Printf("tcb-bot v%s %s %s\n", version, commit, date)
-		os.Exit(1)
-	}
 
-	loadConfig(configFilePath)
-	initLogger()
-	initDiscordBot()
-	initDB()
-	defer func(db *sql.DB) {
-		log.Debug().Msg("Closing database session")
-		err := db.Close()
-		if err != nil {
-			log.Fatal().Err(err).Msg("Error closing database session")
+	case "start":
+		log.Info().Msgf("Starting tcb-bot")
+		log.Info().Msgf("Version: %s", version)
+		log.Info().Msgf("Commit: %s", commit)
+		log.Info().Msgf("Build date: %s", date)
+
+		loadConfig(configFilePath)
+		initLogger()
+		initDiscordBot()
+		initDB()
+		defer func(db *bolt.DB) {
+			log.Debug().Msg("Closing database session")
+			if err := db.Close(); err != nil {
+				log.Fatal().Err(err).Msg("Error closing database session")
+			}
+		}(db)
+		loadCollectedChapters()
+		defer saveCollectedChapters()
+
+		log.Debug().Msg("Creating new collector")
+		collector := colly.NewCollector(
+			colly.AllowURLRevisit(),
+		)
+
+		collector.SetRequestTimeout(120 * time.Second)
+
+		collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
+			processHTMLElement(e)
+		})
+
+		log.Debug().Msg("Creating new ticker")
+		ticker := time.NewTicker(time.Duration(config.SleepTimer) * time.Minute)
+		defer ticker.Stop()
+
+		// Using for range loop over ticker.C
+		for range ticker.C {
+			log.Info().Msg("Checking new releases for titles matching watched mangas...")
+			err := collector.Visit(websiteURL)
+			if err != nil {
+				log.Error().Err(err).Msg("Error visiting website, trying again in the next cycle")
+				sendDiscordNotification("Error visiting website", fmt.Sprintf("%s", err), "",
+					"", 10038562)
+			}
 		}
-	}(db)
-	loadCollectedChapters()
-	defer saveCollectedChapters()
 
-	log.Debug().Msg("Creating new collector")
-	collector := colly.NewCollector(
-		colly.AllowURLRevisit(),
-	)
-
-	collector.SetRequestTimeout(120 * time.Second)
-
-	collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
-		processHTMLElement(e, discord)
-	})
-
-	log.Debug().Msg("Creating new ticker")
-	ticker := time.NewTicker(time.Duration(config.SleepTimer) * time.Minute)
-	defer ticker.Stop()
-
-	// Using for range loop over ticker.C
-	for range ticker.C {
-		log.Info().Msg("Checking new releases for titles matching watched mangas...")
-		err := collector.Visit(websiteURL)
-		if err != nil {
-			log.Error().Err(err).Msg("Error visiting website, trying again in the next cycle")
-			sendDiscordNotification("Error visiting website", fmt.Sprintf("%s", err), "",
-				"", 10038562)
+	default:
+		pflag.Usage()
+		if cmd != "help" {
+			os.Exit(0)
 		}
 	}
-}
-
-func PrintHelp() {
-	fmt.Printf(`
-A Discord bot to notify you about the latest manga chapters released by TCB.
-
-Usage:
-tcb-bot [flags]
-
-Flags:
-  -c,  --config string          (Optional) Specifies the path for the config file. default: "config.yaml"
-  -v,  --version                (Optional) Displays version information.
-  -h,  --help	                (Optional) Displays help message.
-  -d,  --debug                  (Optional) Sets log level to debug.
-
-Configuration options:
-  discordToken                  (Required) The token of the Discord bot you want to send the notifications with.
-  discordChannelID              (Required) The ID of the Discord channel you want to send the notifications to.
-  collectedChaptersFilePath     (Optional) Path to the collectedChaptersFile. default: "collected_chapters.db"
-  logPath                       (Optional) Path to the log file. default: "tcb-bot.log"
-  logMaxSize                    (Optional) Max size in MB for log file before rotating. default: 10MB
-  logMaxBackups                 (Optional) Max log backups to keep before deleting old logs. default: 3
-  watchedMangas                 (Optional) Mangas to monitor for new releases in list format. default: "One Piece"
-  sleepTimer                    (Optional) Time to wait in minutes before checking for new chapters. default: 15
-
-`)
 }
