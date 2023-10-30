@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -366,7 +368,38 @@ func main() {
 
 	switch cmd := pflag.Arg(0); cmd {
 	case "version":
-		fmt.Printf("tcb-bot v%s %s %s\n", version, commit, date)
+		fmt.Printf("Version: %v\nCommit: %v\n", version, commit)
+
+		// get the latest release tag from api
+		client := http.Client{
+			Timeout: 10 * time.Second,
+		}
+
+		resp, err := client.Get("https://api.github.com/repos/nuxencs/tcb-bot/releases/latest")
+		if err != nil {
+			if errors.Is(err, http.ErrHandlerTimeout) {
+				fmt.Println("Server timed out while fetching latest release from api")
+			} else {
+				fmt.Printf("Failed to fetch latest release from api: %v\n", err)
+			}
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+
+		// api returns 500 instead of 404 here
+		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusInternalServerError {
+			fmt.Print("No release found")
+			os.Exit(1)
+		}
+
+		var rel struct {
+			TagName string `json:"tag_name"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+			fmt.Printf("Failed to decode response from api: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Latest release: %v\n", rel.TagName)
 
 	case "start":
 		log.Info().Msgf("Starting tcb-bot")
