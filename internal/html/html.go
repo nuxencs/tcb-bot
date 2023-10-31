@@ -3,6 +3,7 @@ package html
 import (
 	"fmt"
 	"html"
+	"regexp"
 	"strings"
 	"time"
 
@@ -65,14 +66,23 @@ func (coll *Collector) Start() error {
 }
 
 func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
+	coll.log.Debug().Msg("Finding values for releaseTitle, releaseLink, chapterTitle and releaseTime")
+
 	releaseTitle := e.ChildText("a.text-white.text-lg.font-bold")
 	releaseLink := e.ChildAttr("a.text-white.text-lg.font-bold", "href")
 	chapterTitle := e.ChildText("div.mb-3 > div")
 	releaseTime := e.ChildAttr("time-ago", "datetime")
 
-	coll.log.Debug().Msg("Finding values for releaseTitle, releaseLink, chapterTitle and releaseTime")
 	if releaseTitle == "" || releaseLink == "" || chapterTitle == "" || releaseTime == "" {
 		coll.log.Fatal().Msg("Error finding values for releaseTitle, releaseLink, chapterTitle or releaseTime")
+	}
+
+	if !coll.validateReleaseTitle(releaseTitle) {
+		coll.log.Fatal().Msg("Error validating releaseTitle")
+	}
+
+	if !coll.validateReleaseLink(releaseLink) {
+		coll.log.Fatal().Msg("Error validating releaseLink")
 	}
 
 	// Unescape HTML entities
@@ -132,4 +142,14 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 			break
 		}
 	}
+}
+
+func (coll *Collector) validateReleaseTitle(releaseTitle string) bool {
+	re := regexp.MustCompile(`^(.+?) Chapter (\d+(\.\d+)?)$`)
+	return re.MatchString(releaseTitle)
+}
+
+func (coll *Collector) validateReleaseLink(releaseLink string) bool {
+	re := regexp.MustCompile(`^/chapters/\d+/[a-z0-9-]+-chapter-\d+.*$`)
+	return re.MatchString(releaseLink)
 }
