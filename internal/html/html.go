@@ -106,10 +106,17 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 				domain.CollectedChaptersMutex.Unlock()
 
 				// Format time to RFC1123 with CEST timezone
-				t, _ := time.Parse(time.RFC3339, timeStr)
+				t, err := time.Parse(time.RFC3339, timeStr)
+				if err != nil {
+					coll.log.Fatal().Err(err).Str("chapter", mangaTitle).Msg("error parsing release time")
+				}
 
 				// Convert to a specific time zone.
-				location, _ := time.LoadLocation("Europe/Berlin") // Use the correct location here.
+				location, err := time.LoadLocation("Europe/Berlin") // Use the correct location here.
+				if err != nil {
+					coll.log.Fatal().Err(err).Str("chapter", mangaTitle).Msg("error converting to time zone")
+				}
+
 				t = t.In(location)
 				formattedTime := t.Format(time.RFC1123)
 
