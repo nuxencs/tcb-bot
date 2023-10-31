@@ -3,8 +3,11 @@ package domain
 import "sync"
 
 type ChapterInfo struct {
-	MangaLink string
-	TimeStr   string
+	ReleaseLink   string
+	MangaTitle    string
+	ChapterNumber string
+	ChapterTitle  string
+	ReleaseTime   string
 }
 
 var (

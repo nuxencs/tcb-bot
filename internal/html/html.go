@@ -65,66 +65,69 @@ func (coll *Collector) Start() error {
 }
 
 func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
-	mangaLink := e.ChildAttr("a.text-white.text-lg.font-bold", "href")
-	mangaTitle := e.ChildText("a.text-white.text-lg.font-bold")
+	releaseTitle := e.ChildText("a.text-white.text-lg.font-bold")
+	releaseLink := e.ChildAttr("a.text-white.text-lg.font-bold", "href")
 	chapterTitle := e.ChildText("div.mb-3 > div")
-	timeStr := e.ChildAttr("time-ago", "datetime")
+	releaseTime := e.ChildAttr("time-ago", "datetime")
 
-	coll.log.Debug().Msg("Finding values for mangaLink, mangaTitle, chapterTitle and timeStr")
-	if mangaLink == "" || mangaTitle == "" || chapterTitle == "" || timeStr == "" {
-		coll.log.Fatal().Msg("Error finding values for mangaLink, mangaTitle, chapterTitle or timeStr")
+	coll.log.Debug().Msg("Finding values for releaseTitle, releaseLink, chapterTitle and releaseTime")
+	if releaseTitle == "" || releaseLink == "" || chapterTitle == "" || releaseTime == "" {
+		coll.log.Fatal().Msg("Error finding values for releaseTitle, releaseLink, chapterTitle or releaseTime")
 	}
 
 	// Unescape HTML entities
-	mangaTitle = html.UnescapeString(mangaTitle)
+	releaseTitle = html.UnescapeString(releaseTitle)
 	chapterTitle = html.UnescapeString(chapterTitle)
 
-	manga := strings.Split(mangaTitle, " Chapter ")[0]
-	chapter := strings.Split(mangaTitle, " Chapter ")[1]
+	mangaTitle := strings.Split(releaseTitle, " Chapter ")[0]
+	chapterNumber := strings.Split(releaseTitle, " Chapter ")[1]
 
 	coll.log.Debug().Msg("Iterating over watched mangas")
 	for _, m := range coll.cfg.Config.WatchedMangas {
-		coll.log.Debug().Str("chapter", mangaTitle).Msgf("Checking if chapter contains %s", m)
+		coll.log.Debug().Str("chapter", releaseTitle).Msgf("Checking if chapter contains %s", m)
 
-		if strings.Contains(mangaTitle, m) {
+		if strings.Contains(releaseTitle, m) {
 			domain.CollectedChaptersMutex.RLock()
 
-			_, ok := domain.CollectedChapters[mangaTitle]
-			coll.log.Debug().Str("chapter", mangaTitle).Msg("Checking if chapter was already collected")
+			_, ok := domain.CollectedChapters[releaseTitle]
+			coll.log.Debug().Str("chapter", releaseTitle).Msg("Checking if chapter was already collected")
 
 			domain.CollectedChaptersMutex.RUnlock()
 
 			if ok {
-				coll.log.Info().Str("chapter", mangaTitle).Msg("Notification was already sent, not sending")
+				coll.log.Info().Str("chapter", releaseTitle).Msg("Notification was already sent, not sending")
 			} else {
 				domain.CollectedChaptersMutex.Lock()
-				coll.log.Debug().Str("chapter", mangaTitle).Msg("Adding chapter to collected chapters")
-				domain.CollectedChapters[mangaTitle] = domain.ChapterInfo{
-					MangaLink: mangaLink,
-					TimeStr:   timeStr,
+				coll.log.Debug().Str("chapter", releaseTitle).Msg("Adding chapter to collected chapters")
+				domain.CollectedChapters[releaseTitle] = domain.ChapterInfo{
+					ReleaseLink:   releaseLink,
+					MangaTitle:    mangaTitle,
+					ChapterNumber: chapterNumber,
+					ChapterTitle:  chapterTitle,
+					ReleaseTime:   releaseTime,
 				}
 				domain.CollectedChaptersMutex.Unlock()
 
 				// Format time to RFC1123 with CEST timezone
-				t, err := time.Parse(time.RFC3339, timeStr)
+				t, err := time.Parse(time.RFC3339, releaseTime)
 				if err != nil {
-					coll.log.Fatal().Err(err).Str("chapter", mangaTitle).Msg("error parsing release time")
+					coll.log.Fatal().Err(err).Str("chapter", releaseTitle).Msg("error parsing release time")
 				}
 
 				// Convert to a specific time zone.
 				location, err := time.LoadLocation("Europe/Berlin") // Use the correct location here.
 				if err != nil {
-					coll.log.Fatal().Err(err).Str("chapter", mangaTitle).Msg("error converting to time zone")
+					coll.log.Fatal().Err(err).Str("chapter", releaseTitle).Msg("error converting to time zone")
 				}
 
 				t = t.In(location)
 				formattedTime := t.Format(time.RFC1123)
 
 				// Send notification to Discord
-				coll.log.Debug().Str("chapter", mangaTitle).Msgf("Sending notification to discord; Manga: %s ; Chapter: %s", manga, chapter)
-				coll.bot.SendDiscordNotification(manga, fmt.Sprintf("Chapter %s: %s\n", chapter, chapterTitle),
-					websiteURL+mangaLink, "Released at "+formattedTime, 3447003)
-				coll.log.Info().Str("chapter", mangaTitle).Msg("Notification sent")
+				coll.log.Debug().Str("chapter", releaseTitle).Msgf("Sending notification to discord; Manga: %s ; Chapter: %s", mangaTitle, chapterNumber)
+				coll.bot.SendDiscordNotification(mangaTitle, fmt.Sprintf("Chapter %s: %s\n", chapterNumber, chapterTitle),
+					websiteURL+releaseLink, "Released at "+formattedTime, 3447003)
+				coll.log.Info().Str("chapter", releaseTitle).Msg("Notification sent")
 			}
 			break
 		}

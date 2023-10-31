@@ -35,9 +35,12 @@ func (db *DB) Open() error {
 	// Create table if not exists
 	_, err = database.Exec(`
         CREATE TABLE IF NOT EXISTS collected_chapters (
-            mangaTitle TEXT PRIMARY KEY,
-            mangaLink TEXT,
-            timeStr TEXT
+            releaseTitle TEXT PRIMARY KEY,
+            releaseLink TEXT,
+            mangaTitle TEXT,
+            chapterNumber TEXT,
+            chapterTitle TEXT,
+            releaseTime TEXT
         );`)
 	if err != nil {
 		return err
@@ -58,7 +61,7 @@ func (db *DB) Close() error {
 
 func (db *DB) LoadCollectedChapters() {
 	db.log.Debug().Msg("Loading collected chapters")
-	rows, err := db.handler.Query(`SELECT mangaTitle, mangaLink, timeStr FROM collected_chapters;`)
+	rows, err := db.handler.Query(`SELECT releaseTitle, releaseLink, mangaTitle, chapterNumber, chapterTitle, releaseTime FROM collected_chapters;`)
 	if err != nil {
 		db.log.Fatal().Err(err).Msg("Error loading collected chapters")
 		return
@@ -67,17 +70,20 @@ func (db *DB) LoadCollectedChapters() {
 
 	db.log.Debug().Msg("Scanning rows")
 	for rows.Next() {
-		var mangaTitle, mangaLink, timeStr string
+		var releaseTitle, releaseLink, mangaTitle, chapterNumber, chapterTitle, releaseTime string
 
-		if err := rows.Scan(&mangaTitle, &mangaLink, &timeStr); err != nil {
+		if err := rows.Scan(&releaseTitle, &releaseLink, &mangaTitle, &chapterNumber, &chapterTitle, &releaseTime); err != nil {
 			db.log.Error().Err(err).Msg("Error scanning chapter row")
 			continue
 		}
 
-		db.log.Debug().Str("chapter", mangaTitle).Msg("Updating CollectedChapters with scanned info")
-		domain.CollectedChapters[mangaTitle] = domain.ChapterInfo{
-			MangaLink: mangaLink,
-			TimeStr:   timeStr,
+		db.log.Debug().Str("chapter", releaseTitle).Msg("Updating CollectedChapters with scanned info")
+		domain.CollectedChapters[releaseTitle] = domain.ChapterInfo{
+			ReleaseLink:   releaseLink,
+			MangaTitle:    mangaTitle,
+			ChapterNumber: chapterNumber,
+			ChapterTitle:  chapterTitle,
+			ReleaseTime:   releaseTime,
 		}
 	}
 
@@ -88,16 +94,16 @@ func (db *DB) LoadCollectedChapters() {
 }
 
 func (db *DB) SaveCollectedChapters() {
-	for mangaTitle, chapterInfo := range domain.CollectedChapters {
-		db.log.Debug().Str("chapter", mangaTitle).Msg("Saving collected chapter")
+	for releaseTitle, chapterInfo := range domain.CollectedChapters {
+		db.log.Debug().Str("chapter", releaseTitle).Msg("Saving collected chapter")
 		_, err := db.handler.Exec(`
-            INSERT INTO collected_chapters (mangaTitle, mangaLink, timeStr) 
-            VALUES (?, ?, ?)
-            ON CONFLICT(mangaTitle) DO UPDATE 
-            SET mangaLink = excluded.mangaLink, timeStr = excluded.timeStr;`,
-			mangaTitle, chapterInfo.MangaLink, chapterInfo.TimeStr)
+            INSERT INTO collected_chapters (releaseTitle, releaseLink, mangaTitle, chapterNumber, chapterTitle, releaseTime) 
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(releaseTitle) DO UPDATE 
+            SET releaseLink = excluded.releaseLink, mangaTitle = excluded.mangaTitle, chapterNumber = excluded.chapterNumber, chapterTitle = excluded.chapterTitle, releaseTime = excluded.releaseTime;`,
+			releaseTitle, chapterInfo.ReleaseLink, chapterInfo.MangaTitle, chapterInfo.ChapterNumber, chapterInfo.ChapterTitle, chapterInfo.ReleaseTime)
 		if err != nil {
-			db.log.Fatal().Str("chapter", mangaTitle).Err(err).Msg("Error saving collected chapter")
+			db.log.Fatal().Str("chapter", releaseTitle).Err(err).Msg("Error saving collected chapter")
 		}
 	}
 }
