@@ -20,7 +20,6 @@ import (
 	bolt "go.etcd.io/bbolt"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"gopkg.in/yaml.v2"
-	_ "modernc.org/sqlite"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/gocolly/colly"
