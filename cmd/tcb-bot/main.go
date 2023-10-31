@@ -69,8 +69,8 @@ var (
 
 var (
 	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	commit  = ""
+	date    = ""
 )
 
 const usage = `A Discord bot to notify you about the latest manga chapters released by TCB.
