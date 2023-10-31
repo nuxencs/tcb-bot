@@ -137,8 +137,8 @@ func main() {
 		c := html.NewCollector(log, cfg, bot, db)
 		err := c.Start()
 		if err != nil {
-			log.Fatal().Err(err).Msg("error visiting collecting chapters")
-			bot.SendDiscordNotification("Error visiting website", fmt.Sprintf("%s", err), "",
+			log.Fatal().Err(err).Msg("error collecting chapters")
+			bot.SendDiscordNotification("Error collecting chapters", fmt.Sprintf("%v", err), "",
 				"", 10038562)
 		}
 
