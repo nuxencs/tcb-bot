@@ -1,0 +1,64 @@
+# config.toml
+
+# Discord Bot Token
+#
+# Default: ""
+#
+discordToken = ""
+
+# Discord Channel ID
+#
+# Default: ""
+#
+discordChannelID = ""
+
+# Collected Chapters Database File
+# Make sure to use forward slashes and include the filename with extension. e.g. "database/collected_chapters.db"
+#
+# Default: ""
+#
+collectedChaptersDB = ""
+
+# tcb-bot logs file
+# If not defined, logs to stdout
+# Make sure to use forward slashes and include the filename with extension. e.g. "logs/tcb-bot.log", "C:/tcb-bot/logs/tcb-bot.log"
+#
+# Optional
+#
+#logPath = ""
+
+# Log level
+#
+# Default: "DEBUG"
+#
+# Options: "ERROR", "DEBUG", "INFO", "WARN", "TRACE"
+#
+logLevel = "DEBUG"
+
+# Log Max Size
+#
+# Default: 50
+#
+# Max log size in megabytes
+#
+#logMaxSize = 50
+
+# Log Max Backups
+#
+# Default: 3
+#
+# Max amount of old log files
+#
+#logMaxBackups = 3
+
+# Watched Mangas
+#
+# Default: [ "One Piece", "Jujutsu Kaisen" ]
+#
+#watchedMangas = [ "One Piece", "Jujutsu Kaisen" ]
+
+# Sleep timer in minutes
+#
+# Default: 15
+#
+#sleepTimer = 15
