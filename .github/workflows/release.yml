@@ -31,11 +31,11 @@ jobs:
           cache: true
 
       - name: Run GoReleaser build
-        uses: goreleaser/goreleaser-action@v4
+        uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean --skip-validate --skip-publish --parallelism 99
+          args: release --clean --skip=validate,publish --parallelism 99
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -62,7 +62,7 @@ jobs:
           cache: true
 
       - name: Run GoReleaser build and publish tags
-        uses: goreleaser/goreleaser-action@v4
+        uses: goreleaser/goreleaser-action@v5
         with:
           distribution: goreleaser
           version: latest
