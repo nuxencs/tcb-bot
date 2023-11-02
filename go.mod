@@ -3,9 +3,9 @@ module tcb-bot
 go 1.20
 
 require (
-	github.com/autobrr/autobrr v1.32.0
+	github.com/autobrr/autobrr v1.33.0
 	github.com/bwmarrin/discordgo v0.27.1
-	github.com/fsnotify/fsnotify v1.6.0
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/rs/zerolog v1.31.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.17.0
