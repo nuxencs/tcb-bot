@@ -20,6 +20,11 @@
 # Go workspace file
 go.work
 
+# Node
+node_modules
+package.json
+package-lock.json
+
 # Additional files
 .idea/
 dist/
