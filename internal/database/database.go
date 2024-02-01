@@ -25,12 +25,12 @@ func NewDB(log logger.Logger, cfg *config.AppConfig) *DB {
 }
 
 func (db *DB) Open() error {
-	db.log.Debug().Msg("Trying to open SQLite database")
+	db.log.Trace().Msg("Trying to open SQLite database")
 	database, err := sql.Open("sqlite", db.cfg.Config.CollectedChaptersDB)
 	if err != nil {
 		return err
 	}
-	db.log.Debug().Msg("Successfully opened SQLite database")
+	db.log.Trace().Msg("Successfully opened SQLite database")
 
 	// Create table if not exists
 	_, err = database.Exec(`
@@ -48,7 +48,7 @@ func (db *DB) Open() error {
 
 	db.handler = database
 
-	db.log.Debug().Msg("Successfully created table")
+	db.log.Trace().Msg("Successfully created table")
 	return nil
 }
 
@@ -60,7 +60,7 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) LoadCollectedChapters() {
-	db.log.Debug().Msg("Loading collected chapters")
+	db.log.Trace().Msg("Loading collected chapters")
 	rows, err := db.handler.Query(`SELECT releaseTitle, releaseLink, mangaTitle, chapterNumber, chapterTitle, releaseTime FROM collected_chapters;`)
 	if err != nil {
 		db.log.Fatal().Err(err).Msg("Error loading collected chapters")
@@ -68,7 +68,7 @@ func (db *DB) LoadCollectedChapters() {
 	}
 	defer rows.Close()
 
-	db.log.Debug().Msg("Scanning rows")
+	db.log.Trace().Msg("Scanning rows")
 	for rows.Next() {
 		var releaseTitle, releaseLink, mangaTitle, chapterNumber, chapterTitle, releaseTime string
 
@@ -77,7 +77,7 @@ func (db *DB) LoadCollectedChapters() {
 			continue
 		}
 
-		db.log.Debug().Str("chapter", releaseTitle).Msg("Updating CollectedChapters with scanned info")
+		db.log.Trace().Str("chapter", releaseTitle).Msg("Updating CollectedChapters with scanned info")
 		domain.CollectedChapters[releaseTitle] = domain.ChapterInfo{
 			ReleaseLink:   releaseLink,
 			MangaTitle:    mangaTitle,
@@ -87,7 +87,7 @@ func (db *DB) LoadCollectedChapters() {
 		}
 	}
 
-	db.log.Debug().Msg("Reading rows")
+	db.log.Trace().Msg("Reading rows")
 	if err := rows.Err(); err != nil {
 		db.log.Fatal().Err(err).Msg("Error reading rows")
 	}
@@ -95,7 +95,7 @@ func (db *DB) LoadCollectedChapters() {
 
 func (db *DB) SaveCollectedChapters() {
 	for releaseTitle, chapterInfo := range domain.CollectedChapters {
-		db.log.Debug().Str("chapter", releaseTitle).Msg("Saving collected chapter")
+		db.log.Trace().Str("chapter", releaseTitle).Msg("Saving collected chapter")
 		_, err := db.handler.Exec(`
             INSERT INTO collected_chapters (releaseTitle, releaseLink, mangaTitle, chapterNumber, chapterTitle, releaseTime) 
             VALUES (?, ?, ?, ?, ?, ?)

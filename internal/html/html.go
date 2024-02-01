@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	websiteURL = "https://tcbscans.com"
+	WebsiteURL = "https://tcbscans.com"
 )
 
 type Collector struct {
@@ -38,7 +38,7 @@ func NewCollector(log logger.Logger, cfg *config.AppConfig, bot *discord.Bot, db
 }
 
 func (coll *Collector) Start() error {
-	coll.log.Debug().Msg("Creating new collector")
+	coll.log.Trace().Msg("Creating new collector")
 	collector := colly.NewCollector(
 		colly.AllowURLRevisit(),
 	)
@@ -49,19 +49,20 @@ func (coll *Collector) Start() error {
 		coll.processHTMLElement(e)
 	})
 
-	coll.log.Debug().Msg("Creating new ticker")
+	coll.log.Trace().Msg("Creating new ticker")
 	ticker := time.NewTicker(time.Duration(coll.cfg.Config.SleepTimer) * time.Minute)
 	defer ticker.Stop()
 
 	// Using for range loop over ticker.C
 	for range ticker.C {
 		coll.log.Info().Msg("Checking new releases for titles matching watched mangas...")
-		err := collector.Visit(websiteURL)
+		err := collector.Visit(WebsiteURL)
 		if err != nil {
 			return err
 		}
 		coll.db.SaveCollectedChapters()
 	}
+
 	return nil
 }
 
@@ -73,16 +74,21 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 	chapterTitle := e.ChildText("div.mb-3 > div")
 	releaseTime := e.ChildAttr("time-ago", "datetime")
 
+	coll.log.Debug().Msgf("Found: %s // %s // %s // %s", releaseTitle, releaseLink, chapterTitle, releaseTime)
+
 	if releaseTitle == "" || releaseLink == "" || chapterTitle == "" || releaseTime == "" {
-		coll.log.Fatal().Msg("Error finding values for releaseTitle, releaseLink, chapterTitle or releaseTime")
+		coll.log.Error().Msg("Error finding values for releaseTitle, releaseLink, chapterTitle or releaseTime")
+		return
 	}
 
 	if !coll.validateReleaseTitle(releaseTitle) {
-		coll.log.Fatal().Msg("Error validating releaseTitle")
+		coll.log.Error().Msg("Error validating releaseTitle")
+		return
 	}
 
 	if !coll.validateReleaseLink(releaseLink) {
-		coll.log.Fatal().Msg("Error validating releaseLink")
+		coll.log.Error().Msg("Error validating releaseLink")
+		return
 	}
 
 	// Unescape HTML entities
@@ -92,15 +98,15 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 	mangaTitle := strings.Split(releaseTitle, " Chapter ")[0]
 	chapterNumber := strings.Split(releaseTitle, " Chapter ")[1]
 
-	coll.log.Debug().Msg("Iterating over watched mangas")
+	coll.log.Trace().Msg("Iterating over watched mangas")
 	for _, m := range coll.cfg.Config.WatchedMangas {
-		coll.log.Debug().Str("chapter", releaseTitle).Msgf("Checking if chapter contains %s", m)
+		coll.log.Trace().Str("chapter", releaseTitle).Msgf("Checking if chapter contains %s", m)
 
 		if strings.Contains(releaseTitle, m) {
 			domain.CollectedChaptersMutex.RLock()
 
 			_, ok := domain.CollectedChapters[releaseTitle]
-			coll.log.Debug().Str("chapter", releaseTitle).Msg("Checking if chapter was already collected")
+			coll.log.Trace().Str("chapter", releaseTitle).Msg("Checking if chapter was already collected")
 
 			domain.CollectedChaptersMutex.RUnlock()
 
@@ -108,7 +114,7 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 				coll.log.Info().Str("chapter", releaseTitle).Msg("Notification was already sent, not sending")
 			} else {
 				domain.CollectedChaptersMutex.Lock()
-				coll.log.Debug().Str("chapter", releaseTitle).Msg("Adding chapter to collected chapters")
+				coll.log.Trace().Str("chapter", releaseTitle).Msg("Adding chapter to collected chapters")
 				domain.CollectedChapters[releaseTitle] = domain.ChapterInfo{
 					ReleaseLink:   releaseLink,
 					MangaTitle:    mangaTitle,
@@ -134,9 +140,9 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 				formattedTime := t.Format(time.RFC1123)
 
 				// Send notification to Discord
-				coll.log.Debug().Str("chapter", releaseTitle).Msgf("Sending notification to discord; Manga: %s ; Chapter: %s", mangaTitle, chapterNumber)
+				coll.log.Debug().Str("chapter", releaseTitle).Msgf("Sending notification to discord: %s // %s", mangaTitle, chapterNumber)
 				coll.bot.SendDiscordNotification(mangaTitle, fmt.Sprintf("Chapter %s: %s\n", chapterNumber, chapterTitle),
-					websiteURL+releaseLink, "Released at "+formattedTime, 3447003)
+					WebsiteURL+releaseLink, "Released at "+formattedTime, 3447003)
 				coll.log.Info().Str("chapter", releaseTitle).Msg("Notification sent")
 			}
 			break
