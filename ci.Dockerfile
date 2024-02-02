@@ -25,7 +25,7 @@ RUN --mount=target=. \
 FROM alpine:latest as RUNNER
 
 LABEL org.opencontainers.image.source = "https://github.com/nuxencs/tcb-bot"
-LABEL org.opencontainers.image.licenses = "GPL-2.0-or-later"
+LABEL org.opencontainers.image.licenses = "MIT License"
 LABEL org.opencontainers.image.base.name = "alpine:latest"
 
 ENV HOME="/config" \
@@ -36,7 +36,6 @@ RUN apk add --no-cache ca-certificates curl tzdata jq
 
 WORKDIR /app
 VOLUME /config
-EXPOSE 42069
 
 COPY --link --from=app-builder /out/bin/tcb-bot /usr/bin/
 
