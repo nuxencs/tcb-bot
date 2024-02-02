@@ -129,11 +129,13 @@ type Config interface {
 
 type AppConfig struct {
 	Config *domain.Config
-	m      sync.Mutex
+	m      *sync.Mutex
 }
 
 func New(configPath string, version string) *AppConfig {
-	c := &AppConfig{}
+	c := &AppConfig{
+		m: new(sync.Mutex),
+	}
 	c.defaults()
 	c.Config.Version = version
 	c.Config.ConfigPath = configPath
