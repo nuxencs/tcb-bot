@@ -1,0 +1,19 @@
+version: '3.9'
+
+services:
+  tcb-bot:
+    container_name: tcb-bot
+    image: ghcr.io/nuxencs/tcb-bot
+    user: ${PUID}:${PGID} #UID and GID
+    environment:
+      - TCB_BOT__DISCORD_TOKEN=
+      - TCB_BOT__DISCORD_CHANNEL_ID=
+      - TCB_BOT__COLLECTED_CHAPTERS_DB=
+      - TCB_BOT__LOG_LEVEL=
+      - TCB_BOT__LOG_PATH=
+      - TCB_BOT__LOG_MAX_SIZE=
+      - TCB_BOT__LOG_MAX_BACKUPS=
+      - TCB_BOT__WATCHED_MANGAS=
+      - TCB_BOT__SLEEP_TIMER=
+    volumes:
+      - ${DOCKERCONFDIR}/tcb-bot:/config # location of the config file

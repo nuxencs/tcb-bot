@@ -206,19 +206,11 @@ func (c *AppConfig) loadFromEnv() {
 }
 
 func (c *AppConfig) load(configPath string) {
-	// or use viper.SetDefault(val, def)
-	//viper.SetDefault("host", config.Host)
-	//viper.SetDefault("port", config.Port)
-	//viper.SetDefault("logLevel", config.LogLevel)
-	//viper.SetDefault("logPath", config.LogPath)
-
 	viper.SetConfigType("toml")
 
 	// clean trailing slash from configPath
 	configPath = path.Clean(configPath)
 	if configPath != "" {
-		//viper.SetConfigName("config")
-
 		// check if path and file exists
 		// if not, create path and file
 		if err := c.writeConfig(configPath, "config.toml"); err != nil {
