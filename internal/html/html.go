@@ -3,7 +3,6 @@ package html
 import (
 	"fmt"
 	"html"
-	"regexp"
 	"strings"
 	"time"
 
@@ -12,9 +11,12 @@ import (
 	"tcb-bot/internal/discord"
 	"tcb-bot/internal/domain"
 	"tcb-bot/internal/logger"
+	"tcb-bot/internal/utils"
 
 	"github.com/gocolly/colly"
 	"github.com/rs/zerolog"
+
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -68,7 +70,6 @@ func (coll *Collector) Start() error {
 
 func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 	coll.log.Debug().Msg("Finding values for releaseTitle, releaseLink, chapterTitle and releaseTime")
-
 	releaseTitle := e.ChildText("a.text-white.text-lg.font-bold")
 	releaseLink := e.ChildAttr("a.text-white.text-lg.font-bold", "href")
 	chapterTitle := e.ChildText("div.mb-3 > div")
@@ -77,17 +78,19 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 	coll.log.Debug().Msgf("Found: %s // %s // %s // %s", releaseTitle, releaseLink, chapterTitle, releaseTime)
 
 	if releaseTitle == "" || releaseLink == "" || chapterTitle == "" || releaseTime == "" {
-		coll.log.Error().Msg("Error finding values for releaseTitle, releaseLink, chapterTitle or releaseTime")
+		coll.log.Error().Msg("error finding values for releaseTitle, releaseLink, chapterTitle or releaseTime")
 		return
 	}
 
-	if !coll.validateReleaseTitle(releaseTitle) {
-		coll.log.Error().Msg("Error validating releaseTitle")
+	coll.log.Trace().Msgf("Validating scraped release title: %q", releaseTitle)
+	if !utils.ValidateReleaseTitle(releaseTitle) {
+		coll.log.Error().Msgf("error validating releaseTitle: %q", releaseTitle)
 		return
 	}
 
-	if !coll.validateReleaseLink(releaseLink) {
-		coll.log.Error().Msg("Error validating releaseLink")
+	coll.log.Trace().Msgf("Validating scraped release link: %q", releaseLink)
+	if !utils.ValidateReleaseLink(releaseLink) {
+		coll.log.Error().Msgf("error validating releaseLink: %q", releaseLink)
 		return
 	}
 
@@ -95,67 +98,44 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 	releaseTitle = html.UnescapeString(releaseTitle)
 	chapterTitle = html.UnescapeString(chapterTitle)
 
-	mangaTitle := strings.Split(releaseTitle, " Chapter ")[0]
-	chapterNumber := strings.Split(releaseTitle, " Chapter ")[1]
+	mangaTitle := strings.Trim(strings.Split(releaseTitle, "Chapter")[0], " ")
+	chapterNumber := strings.Trim(strings.Split(releaseTitle, "Chapter")[1], " ")
 
-	coll.log.Trace().Msg("Iterating over watched mangas")
-	for _, m := range coll.cfg.Config.WatchedMangas {
-		coll.log.Trace().Str("chapter", releaseTitle).Msgf("Checking if chapter contains %s", m)
+	cleanRlsTitle := fmt.Sprintf("%s Chapter %s", mangaTitle, chapterNumber)
 
-		if strings.Contains(releaseTitle, m) {
-			domain.CollectedChaptersMutex.RLock()
-
-			_, ok := domain.CollectedChapters[releaseTitle]
-			coll.log.Trace().Str("chapter", releaseTitle).Msg("Checking if chapter was already collected")
-
-			domain.CollectedChaptersMutex.RUnlock()
-
-			if ok {
-				coll.log.Info().Str("chapter", releaseTitle).Msg("Notification was already sent, not sending")
-			} else {
-				domain.CollectedChaptersMutex.Lock()
-				coll.log.Trace().Str("chapter", releaseTitle).Msg("Adding chapter to collected chapters")
-				domain.CollectedChapters[releaseTitle] = domain.ChapterInfo{
-					ReleaseLink:   releaseLink,
-					MangaTitle:    mangaTitle,
-					ChapterNumber: chapterNumber,
-					ChapterTitle:  chapterTitle,
-					ReleaseTime:   releaseTime,
-				}
-				domain.CollectedChaptersMutex.Unlock()
-
-				// Format time to RFC1123 with CEST timezone
-				t, err := time.Parse(time.RFC3339, releaseTime)
-				if err != nil {
-					coll.log.Fatal().Err(err).Str("chapter", releaseTitle).Msg("error parsing release time")
-				}
-
-				// Convert to a specific time zone.
-				location, err := time.LoadLocation("Europe/Berlin") // Use the correct location here.
-				if err != nil {
-					coll.log.Fatal().Err(err).Str("chapter", releaseTitle).Msg("error converting to time zone")
-				}
-
-				t = t.In(location)
-				formattedTime := t.Format(time.RFC1123)
-
-				// Send notification to Discord
-				coll.log.Debug().Str("chapter", releaseTitle).Msgf("Sending notification to discord: %s // %s", mangaTitle, chapterNumber)
-				coll.bot.SendDiscordNotification(mangaTitle, fmt.Sprintf("Chapter %s: %s\n", chapterNumber, chapterTitle),
-					WebsiteURL+releaseLink, "Released at "+formattedTime, 3447003)
-				coll.log.Info().Str("chapter", releaseTitle).Msg("Notification sent")
-			}
-			break
-		}
+	coll.log.Trace().Msgf("Checking if manga is on watchlist: %q", mangaTitle)
+	if !slices.Contains(coll.cfg.Config.WatchedMangas, mangaTitle) {
+		coll.log.Trace().Msgf("Manga is not on watchlist: %q", mangaTitle)
+		return
 	}
-}
 
-func (coll *Collector) validateReleaseTitle(releaseTitle string) bool {
-	re := regexp.MustCompile(`^(.+?) Chapter (\d+(\.\d+)?)$`)
-	return re.MatchString(releaseTitle)
-}
+	coll.log.Trace().Msgf("Checking if chapter was already collected: %q", cleanRlsTitle)
+	_, ok := domain.CollectedChaptersMap.Load(cleanRlsTitle)
+	if ok {
+		coll.log.Info().Msgf("Chapter was already collected, not sending notification: %q", cleanRlsTitle)
+		return
+	}
 
-func (coll *Collector) validateReleaseLink(releaseLink string) bool {
-	re := regexp.MustCompile(`^/chapters/\d+/[a-z0-9-]+-chapter-\d+.*$`)
-	return re.MatchString(releaseLink)
+	formattedTime, err := utils.ParseAndConvertTime(releaseTime, time.RFC3339, "Europe/Berlin", time.RFC1123)
+	if err != nil {
+		coll.log.Fatal().Err(err).Msgf("error parsing release time: %q", cleanRlsTitle)
+	}
+
+	coll.log.Trace().Msgf("Adding chapter to collected chapters: %q", cleanRlsTitle)
+	newChapter := domain.ChapterInfo{
+		ReleaseLink:   releaseLink,
+		MangaTitle:    mangaTitle,
+		ChapterNumber: chapterNumber,
+		ChapterTitle:  chapterTitle,
+		ReleaseTime:   formattedTime,
+	}
+
+	domain.CollectedChaptersMap.Store(cleanRlsTitle, newChapter)
+
+	// Send notification to Discord
+	coll.log.Trace().Msgf("Sending notification to discord: %q", cleanRlsTitle)
+	coll.bot.SendDiscordNotification(newChapter.MangaTitle, fmt.Sprintf("Chapter %s: %s\n",
+		newChapter.ChapterNumber, newChapter.ChapterTitle), WebsiteURL+newChapter.ReleaseLink,
+		"Released at "+newChapter.ReleaseTime, 3447003)
+	coll.log.Info().Msgf("Notification sent: %q", cleanRlsTitle)
 }

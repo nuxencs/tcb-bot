@@ -11,6 +11,5 @@ type ChapterInfo struct {
 }
 
 var (
-	CollectedChapters      = make(map[string]ChapterInfo)
-	CollectedChaptersMutex = &sync.RWMutex{} // Safe concurrent access
+	CollectedChaptersMap sync.Map
 )

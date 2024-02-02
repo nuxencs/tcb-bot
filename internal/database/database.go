@@ -77,14 +77,16 @@ func (db *DB) LoadCollectedChapters() {
 			continue
 		}
 
-		db.log.Trace().Str("chapter", releaseTitle).Msg("Updating CollectedChapters with scanned info")
-		domain.CollectedChapters[releaseTitle] = domain.ChapterInfo{
+		db.log.Trace().Str("chapter", releaseTitle).Msg("Updating CollectedChaptersMap with scanned info")
+		newChapter := domain.ChapterInfo{
 			ReleaseLink:   releaseLink,
 			MangaTitle:    mangaTitle,
 			ChapterNumber: chapterNumber,
 			ChapterTitle:  chapterTitle,
 			ReleaseTime:   releaseTime,
 		}
+
+		domain.CollectedChaptersMap.Store(releaseTitle, newChapter)
 	}
 
 	db.log.Trace().Msg("Reading rows")
@@ -94,16 +96,19 @@ func (db *DB) LoadCollectedChapters() {
 }
 
 func (db *DB) SaveCollectedChapters() {
-	for releaseTitle, chapterInfo := range domain.CollectedChapters {
-		db.log.Trace().Str("chapter", releaseTitle).Msg("Saving collected chapter")
+	domain.CollectedChaptersMap.Range(func(releaseTitle, chapterInfo any) bool {
+		db.log.Trace().Str("chapter", releaseTitle.(string)).Msg("Saving collected chapter")
 		_, err := db.handler.Exec(`
             INSERT INTO collected_chapters (releaseTitle, releaseLink, mangaTitle, chapterNumber, chapterTitle, releaseTime) 
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(releaseTitle) DO UPDATE 
             SET releaseLink = excluded.releaseLink, mangaTitle = excluded.mangaTitle, chapterNumber = excluded.chapterNumber, chapterTitle = excluded.chapterTitle, releaseTime = excluded.releaseTime;`,
-			releaseTitle, chapterInfo.ReleaseLink, chapterInfo.MangaTitle, chapterInfo.ChapterNumber, chapterInfo.ChapterTitle, chapterInfo.ReleaseTime)
+			releaseTitle.(string), chapterInfo.(domain.ChapterInfo).ReleaseLink,
+			chapterInfo.(domain.ChapterInfo).MangaTitle, chapterInfo.(domain.ChapterInfo).ChapterNumber,
+			chapterInfo.(domain.ChapterInfo).ChapterTitle, chapterInfo.(domain.ChapterInfo).ReleaseTime)
 		if err != nil {
-			db.log.Fatal().Str("chapter", releaseTitle).Err(err).Msg("Error saving collected chapter")
+			db.log.Fatal().Str("chapter", releaseTitle.(string)).Err(err).Msg("Error saving collected chapter")
 		}
-	}
+		return true
+	})
 }
