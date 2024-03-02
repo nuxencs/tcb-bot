@@ -16,7 +16,7 @@ type Bot struct {
 
 func NewBot(log logger.Logger, cfg *config.AppConfig) *Bot {
 	return &Bot{
-		log: log.With().Str("module", "discordbot").Logger(),
+		log: log.With().Str("module", "discord-bot").Logger(),
 		cfg: cfg,
 	}
 }
