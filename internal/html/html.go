@@ -80,18 +80,18 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 		return
 	}
 
+	chapterTitle := e.ChildText("div.mb-3 > div")
+	if chapterTitle == "" {
+		coll.log.Debug().Msgf("coudln't find value for chapterTitle: %q", releaseTitle)
+	}
+
 	releaseTime := e.ChildAttr("time-ago", "datetime")
 	if releaseTime == "" {
 		coll.log.Error().Msgf("error finding value for releaseTime: %q", releaseTitle)
 		return
 	}
 
-	chapterTitle := e.ChildText("div.mb-3 > div")
-	if chapterTitle == "" {
-		coll.log.Debug().Msgf("coudln't find value for chapterTitle: %q", releaseTitle)
-	}
-
-	coll.log.Debug().Msgf("Found: %s // %s // %s // %s", releaseTitle, releaseLink, releaseTime, chapterTitle)
+	coll.log.Debug().Msgf("Found: %s // %s // %s // %s", releaseTitle, releaseLink, chapterTitle, releaseTime)
 
 	coll.log.Trace().Msgf("Validating scraped release title: %q", releaseTitle)
 	if !utils.ValidateReleaseTitle(releaseTitle) {
