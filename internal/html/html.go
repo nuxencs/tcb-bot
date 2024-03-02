@@ -61,7 +61,6 @@ func (coll *Collector) Start() error {
 		if err != nil {
 			return err
 		}
-		coll.db.SaveCollectedChapters()
 	}
 
 	return nil

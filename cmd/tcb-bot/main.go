@@ -140,17 +140,17 @@ func main() {
 		select {
 		case sig := <-sigCh:
 			log.Info().Msgf("received signal: %q, shutting down bot.", sig.String())
-			db.SaveCollectedChapters()
-			if err := db.Close(); err != nil {
-				log.Error().Err(err).Msg("error closing db connection")
-				os.Exit(1)
-			}
-			os.Exit(0)
 
 		case err := <-errorChannel:
-			log.Fatal().Err(err).Msg("error collecting chapters")
-			bot.SendDiscordNotification("Error collecting chapters", fmt.Sprintf("%v", err), "",
+			log.Error().Err(err).Msg("error collecting chapters")
+			bot.SendDiscordNotification("Error collecting chapters", err.Error(), "",
 				"", 10038562)
+		}
+
+		db.SaveCollectedChapters()
+		if err := db.Close(); err != nil {
+			log.Error().Err(err).Msg("error closing db connection")
+			os.Exit(1)
 		}
 
 		os.Exit(0)
