@@ -3,6 +3,7 @@ package html
 import (
 	"fmt"
 	"html"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,8 +16,6 @@ import (
 
 	"github.com/gocolly/colly"
 	"github.com/rs/zerolog"
-
-	"golang.org/x/exp/slices"
 )
 
 const (

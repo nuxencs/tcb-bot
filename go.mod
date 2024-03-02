@@ -9,7 +9,6 @@ require (
 	github.com/rs/zerolog v1.32.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.18.2
-	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.29.2
 )
@@ -45,6 +44,7 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/exp v0.0.0-20240222234643-814bf88cf225 // indirect
 	golang.org/x/net v0.21.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
