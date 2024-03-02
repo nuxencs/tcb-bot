@@ -56,7 +56,7 @@ func (coll *Collector) Start() error {
 
 	// Using for range loop over ticker.C
 	for range ticker.C {
-		coll.log.Info().Msg("Checking new releases for titles matching watched mangas...")
+		coll.log.Trace().Msg("Checking new releases for titles matching watched mangas...")
 		err := collector.Visit(WebsiteURL)
 		if err != nil {
 			return err
@@ -70,16 +70,29 @@ func (coll *Collector) Start() error {
 func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 	coll.log.Debug().Msg("Finding values for releaseTitle, releaseLink, chapterTitle and releaseTime")
 	releaseTitle := e.ChildText("a.text-white.text-lg.font-bold")
-	releaseLink := e.ChildAttr("a.text-white.text-lg.font-bold", "href")
-	chapterTitle := e.ChildText("div.mb-3 > div")
-	releaseTime := e.ChildAttr("time-ago", "datetime")
-
-	coll.log.Debug().Msgf("Found: %s // %s // %s // %s", releaseTitle, releaseLink, chapterTitle, releaseTime)
-
-	if releaseTitle == "" || releaseLink == "" || chapterTitle == "" || releaseTime == "" {
-		coll.log.Error().Msg("error finding values for releaseTitle, releaseLink, chapterTitle or releaseTime")
+	if releaseTitle == "" {
+		coll.log.Error().Msg("error finding value for releaseTitle")
 		return
 	}
+
+	releaseLink := e.ChildAttr("a.text-white.text-lg.font-bold", "href")
+	if releaseLink == "" {
+		coll.log.Error().Msgf("error finding value for releaseLink: %q", releaseTitle)
+		return
+	}
+
+	releaseTime := e.ChildAttr("time-ago", "datetime")
+	if releaseTime == "" {
+		coll.log.Error().Msgf("error finding value for releaseTime: %q", releaseTitle)
+		return
+	}
+
+	chapterTitle := e.ChildText("div.mb-3 > div")
+	if chapterTitle == "" {
+		coll.log.Debug().Msgf("coudln't find value for chapterTitle: %q", releaseTitle)
+	}
+
+	coll.log.Debug().Msgf("Found: %s // %s // %s // %s", releaseTitle, releaseLink, releaseTime, chapterTitle)
 
 	coll.log.Trace().Msgf("Validating scraped release title: %q", releaseTitle)
 	if !utils.ValidateReleaseTitle(releaseTitle) {
@@ -111,7 +124,7 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 	coll.log.Trace().Msgf("Checking if chapter was already collected: %q", cleanRlsTitle)
 	_, ok := domain.CollectedChaptersMap.Load(cleanRlsTitle)
 	if ok {
-		coll.log.Info().Msgf("Chapter was already collected, not sending notification: %q", cleanRlsTitle)
+		coll.log.Trace().Msgf("Chapter was already collected, not sending notification: %q", cleanRlsTitle)
 		return
 	}
 
@@ -131,10 +144,16 @@ func (coll *Collector) processHTMLElement(e *colly.HTMLElement) {
 
 	domain.CollectedChaptersMap.Store(cleanRlsTitle, newChapter)
 
+	var desc string
+	if newChapter.ChapterTitle == "" {
+		desc = fmt.Sprintf("Chapter %s\n", newChapter.ChapterNumber)
+	} else {
+		desc = fmt.Sprintf("Chapter %s: %s\n", newChapter.ChapterNumber, newChapter.ChapterTitle)
+	}
+
 	// Send notification to Discord
 	coll.log.Trace().Msgf("Sending notification to discord: %q", cleanRlsTitle)
-	coll.bot.SendDiscordNotification(newChapter.MangaTitle, fmt.Sprintf("Chapter %s: %s\n",
-		newChapter.ChapterNumber, newChapter.ChapterTitle), WebsiteURL+newChapter.ReleaseLink,
+	coll.bot.SendDiscordNotification(newChapter.MangaTitle, desc, WebsiteURL+newChapter.ReleaseLink,
 		"Released at "+newChapter.ReleaseTime, 3447003)
-	coll.log.Info().Msgf("Notification sent: %q", cleanRlsTitle)
+	coll.log.Info().Msgf("Sent notification for: %q", cleanRlsTitle)
 }
