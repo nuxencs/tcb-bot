@@ -52,6 +52,10 @@ release:
   footer: |
     **Full Changelog**: https://github.com/nuxencs/tcb-bot/compare/{{ .PreviousTag }}...{{ .Tag }}
 
+    ## Docker images
+
+    - `docker pull ghcr.io/nuxencs/seasonpackarr:{{ .Tag }}`
+
 checksum:
   name_template: '{{ .ProjectName }}_{{ .Version }}_checksums.txt'
 
