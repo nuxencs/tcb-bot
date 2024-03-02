@@ -124,23 +124,36 @@ func main() {
 
 		db.LoadCollectedChapters()
 
-		// Set up a channel to catch signals for graceful shutdown
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGKILL, syscall.SIGTERM)
+		errorChannel := make(chan error)
 		go func() {
-			<-sigCh
-			db.SaveCollectedChapters()
-			db.Close()
-			os.Exit(1)
+			c := html.NewCollector(log, cfg, bot, db)
+			err := c.Start()
+			if err != nil {
+				errorChannel <- err
+			}
 		}()
 
-		c := html.NewCollector(log, cfg, bot, db)
-		err := c.Start()
-		if err != nil {
-			log.Fatal().Err(err).Msg("error collecting chapters")
-			bot.SendDiscordNotification("Error collecting chapters", fmt.Sprintf("%v", err), "",
+		// Set up a channel to catch signals for graceful shutdown
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+		select {
+		case sig := <-sigCh:
+			log.Info().Msgf("received signal: %q, shutting down bot.", sig.String())
+
+		case err := <-errorChannel:
+			log.Error().Err(err).Msg("error collecting chapters")
+			bot.SendDiscordNotification("Error collecting chapters", err.Error(), "",
 				"", 10038562)
 		}
+
+		db.SaveCollectedChapters()
+		if err := db.Close(); err != nil {
+			log.Error().Err(err).Msg("error closing db connection")
+			os.Exit(1)
+		}
+
+		os.Exit(0)
 
 	default:
 		pflag.Usage()
