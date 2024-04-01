@@ -3,7 +3,7 @@ module tcb-bot
 go 1.22.1
 
 require (
-	github.com/autobrr/autobrr v1.39.1
+	github.com/autobrr/autobrr v1.40.1
 	github.com/bwmarrin/discordgo v0.27.1
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/rs/zerolog v1.32.0
