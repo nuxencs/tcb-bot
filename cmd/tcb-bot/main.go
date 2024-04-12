@@ -53,6 +53,7 @@ func init() {
 
 func main() {
 	var configPath string
+	var lastError string
 
 	pflag.StringVarP(&configPath, "config", "c", "", "Specifies the path for the config file.")
 	pflag.Parse()
@@ -106,6 +107,7 @@ func main() {
 		// init dynamic config
 		cfg.DynamicReload(log)
 
+		// init new db
 		db := database.NewDB(log, cfg)
 		if err := db.Open(); err != nil {
 			log.Fatal().Err(err).Msg("error opening db connection")
@@ -117,19 +119,39 @@ func main() {
 		log.Info().Msgf("Build date: %s", date)
 		log.Info().Msgf("Log-level: %s", cfg.Config.LogLevel)
 
+		// init new discord bot
 		bot := discord.NewBot(log, cfg)
 		if err := bot.Open(); err != nil {
 			log.Fatal().Err(err).Msg("error opening discord session")
 		}
 
+		// load collected chapters
 		db.LoadCollectedChapters()
 
-		errorChannel := make(chan error)
+		// init new collector
+		c := html.NewCollector(log, cfg, bot, db)
+
+		// init new ticker
+		t := time.NewTicker(time.Duration(cfg.Config.SleepTimer) * time.Minute)
+
 		go func() {
-			c := html.NewCollector(log, cfg, bot, db)
-			err := c.Start()
-			if err != nil {
-				errorChannel <- err
+			// Using for range loop over t.C
+			for range t.C {
+				err := c.Run()
+				if err != nil {
+					log.Error().Err(err).Msg("error collecting chapters")
+					currentError := fmt.Sprintf("Unexpected error occurred: %v", err)
+					if currentError != lastError {
+						bot.SendDiscordNotification("Error collecting chapters", currentError,
+							"", "", 10038562)
+						lastError = currentError
+					}
+				} else if lastError != "" {
+					log.Info().Msg("error has been resolved")
+					bot.SendDiscordNotification("Error resolved", "The previous error has been resolved",
+						"", "", 15105570)
+					lastError = ""
+				}
 			}
 		}()
 
@@ -140,13 +162,9 @@ func main() {
 		select {
 		case sig := <-sigCh:
 			log.Info().Msgf("received signal: %q, shutting down bot.", sig.String())
-
-		case err := <-errorChannel:
-			log.Error().Err(err).Msg("error collecting chapters")
-			bot.SendDiscordNotification("Error collecting chapters", err.Error(), "",
-				"", 10038562)
 		}
 
+		// save collected chapters
 		db.SaveCollectedChapters()
 		if err := db.Close(); err != nil {
 			log.Error().Err(err).Msg("error closing db connection")

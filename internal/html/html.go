@@ -27,40 +27,36 @@ type Collector struct {
 	cfg *config.AppConfig
 	bot *discord.Bot
 	db  *database.DB
+	cl  *colly.Collector
 }
 
 func NewCollector(log logger.Logger, cfg *config.AppConfig, bot *discord.Bot, db *database.DB) *Collector {
+	log.Trace().Msg("Creating new collector")
+	collector := colly.NewCollector(
+		colly.AllowURLRevisit(),
+		colly.AllowedDomains("tcbscans.com"),
+	)
+
+	collector.SetRequestTimeout(120 * time.Second)
+
 	return &Collector{
 		log: log.With().Str("module", "collector").Logger(),
 		cfg: cfg,
 		bot: bot,
 		db:  db,
+		cl:  collector,
 	}
 }
 
-func (coll *Collector) Start() error {
-	coll.log.Trace().Msg("Creating new collector")
-	collector := colly.NewCollector(
-		colly.AllowURLRevisit(),
-	)
-
-	collector.SetRequestTimeout(120 * time.Second)
-
-	collector.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
+func (coll *Collector) Run() error {
+	coll.cl.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
 		coll.processHTMLElement(e)
 	})
 
-	coll.log.Trace().Msg("Creating new ticker")
-	ticker := time.NewTicker(time.Duration(coll.cfg.Config.SleepTimer) * time.Minute)
-	defer ticker.Stop()
-
-	// Using for range loop over ticker.C
-	for range ticker.C {
-		coll.log.Trace().Msg("Checking new releases for titles matching watched mangas...")
-		err := collector.Visit(WebsiteURL)
-		if err != nil {
-			return err
-		}
+	coll.log.Trace().Msg("Checking new releases for titles matching watched mangas...")
+	err := coll.cl.Visit(WebsiteURL)
+	if err != nil {
+		return err
 	}
 
 	return nil
