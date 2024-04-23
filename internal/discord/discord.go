@@ -32,13 +32,19 @@ func (bot *Bot) Open() error {
 	}
 	bot.log.Info().Msg("Successfully logged in")
 
-	bot.log.Info().Msg("Creating websocket connection...")
+	bot.log.Debug().Msg("Creating websocket connection...")
 	err = bot.discord.Open()
 	if err != nil {
 		return err
-	} else {
-		bot.log.Info().Msg("Successfully created websocket connection")
 	}
+	bot.log.Debug().Msg("Successfully created websocket connection")
+
+	err = bot.discord.UpdateCustomStatus("Watching TCB Scans")
+	if err != nil {
+		return err
+	}
+	bot.log.Debug().Msg("Successfully updated custom status")
+
 	return nil
 }
 
