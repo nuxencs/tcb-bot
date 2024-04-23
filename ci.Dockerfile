@@ -1,8 +1,9 @@
 # build base
 FROM --platform=$BUILDPLATFORM golang:1.22-alpine3.19 AS app-base
 
-ENV SERVICE=tcb-bot
 WORKDIR /src
+
+ENV SERVICE=tcb-bot
 ARG VERSION=dev \
     REVISION=dev \
     BUILDTIME \
@@ -15,13 +16,13 @@ COPY . ./
 # build tcb-bot
 FROM --platform=$BUILDPLATFORM app-base AS tcb-bot
 RUN --network=none --mount=target=. \
-export GOOS=$TARGETOS; \
-export GOARCH=$TARGETARCH; \
-[[ "$GOARCH" == "amd64" ]] && export GOAMD64=$TARGETVARIANT; \
-[[ "$GOARCH" == "arm" ]] && [[ "$TARGETVARIANT" == "v6" ]] && export GOARM=6; \
-[[ "$GOARCH" == "arm" ]] && [[ "$TARGETVARIANT" == "v7" ]] && export GOARM=7; \
-echo $GOARCH $GOOS $GOARM$GOAMD64; \
-go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${REVISION} -X main.date=${BUILDTIME}" -o /out/bin/tcb-bot cmd/tcb-bot/main.go
+    export GOOS=$TARGETOS; \
+    export GOARCH=$TARGETARCH; \
+    [[ "$GOARCH" == "amd64" ]] && export GOAMD64=$TARGETVARIANT; \
+    [[ "$GOARCH" == "arm" ]] && [[ "$TARGETVARIANT" == "v6" ]] && export GOARM=6; \
+    [[ "$GOARCH" == "arm" ]] && [[ "$TARGETVARIANT" == "v7" ]] && export GOARM=7; \
+    echo $GOARCH $GOOS $GOARM$GOAMD64; \
+    go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${REVISION} -X main.date=${BUILDTIME}" -o /out/bin/tcb-bot cmd/tcb-bot/main.go
 
 # build runner
 FROM alpine:latest as RUNNER
@@ -37,6 +38,7 @@ ENV HOME="/config" \
 
 WORKDIR /app
 VOLUME /config
-ENTRYPOINT ["/usr/bin/tcb-bot", "start", "--config", "/config"]
 
 COPY --link --from=tcb-bot /out/bin/tcb-bot /usr/bin/
+
+ENTRYPOINT ["/usr/bin/tcb-bot", "start", "--config", "/config"]
