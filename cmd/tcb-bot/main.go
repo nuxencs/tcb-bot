@@ -16,6 +16,7 @@ import (
 	"tcb-bot/internal/html"
 	"tcb-bot/internal/logger"
 
+	"github.com/go-co-op/gocron/v2"
 	"github.com/spf13/pflag"
 )
 
@@ -131,29 +132,45 @@ func main() {
 		// init new collector
 		c := html.NewCollector(log, cfg, bot, db)
 
-		// init new ticker
-		t := time.NewTicker(time.Duration(cfg.Config.SleepTimer) * time.Minute)
+		// init new scheduler
+		s, err := gocron.NewScheduler()
+		if err != nil {
+			log.Error().Err(err).Msg("error creating scheduler")
+			os.Exit(1)
+		}
 
-		go func() {
-			// Using for range loop over t.C
-			for range t.C {
-				err := c.Run()
-				if err != nil {
-					log.Error().Err(err).Msg("error collecting chapters")
-					currentError := fmt.Sprintf("Unexpected error occurred: %v", err)
-					if currentError != lastError {
-						bot.SendDiscordNotification("Error collecting chapters", currentError,
-							"", "", 10038562)
-						lastError = currentError
+		// init new job
+		_, err = s.NewJob(
+			gocron.CronJob(
+				fmt.Sprintf("*/%d * * * *", cfg.Config.SleepTimer),
+				false,
+			),
+			gocron.NewTask(
+				func() {
+					err := c.Run()
+					if err != nil {
+						log.Error().Err(err).Msg("error collecting chapters")
+						currentError := fmt.Sprintf("Unexpected error occurred: %v", err)
+						if currentError != lastError {
+							bot.SendDiscordNotification("Error collecting chapters", currentError,
+								"", "", 10038562)
+							lastError = currentError
+						}
+					} else if lastError != "" {
+						log.Info().Msg("error has been resolved")
+						bot.SendDiscordNotification("Error resolved", "The previous error has been resolved",
+							"", "", 15105570)
+						lastError = ""
 					}
-				} else if lastError != "" {
-					log.Info().Msg("error has been resolved")
-					bot.SendDiscordNotification("Error resolved", "The previous error has been resolved",
-						"", "", 15105570)
-					lastError = ""
-				}
-			}
-		}()
+				},
+			),
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("error creating task")
+			os.Exit(1)
+		}
+
+		s.Start()
 
 		// Set up a channel to catch signals for graceful shutdown
 		sigCh := make(chan os.Signal, 1)
@@ -168,6 +185,13 @@ func main() {
 		db.SaveCollectedChapters()
 		if err := db.Close(); err != nil {
 			log.Error().Err(err).Msg("error closing db connection")
+			os.Exit(1)
+		}
+
+		// shut down scheduler
+		err = s.Shutdown()
+		if err != nil {
+			log.Error().Err(err).Msg("error shutting down scheduler")
 			os.Exit(1)
 		}
 
