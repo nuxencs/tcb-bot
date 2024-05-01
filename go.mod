@@ -6,7 +6,7 @@ require (
 	github.com/autobrr/autobrr v1.41.0
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/fsnotify/fsnotify v1.7.0
-	github.com/go-co-op/gocron/v2 v2.2.10
+	github.com/go-co-op/gocron/v2 v2.3.0
 	github.com/rs/zerolog v1.32.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.18.2
