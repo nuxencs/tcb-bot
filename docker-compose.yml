@@ -4,6 +4,7 @@ services:
   tcb-bot:
     container_name: tcb-bot
     image: ghcr.io/nuxencs/tcb-bot
+    restart: unless-stopped
     user: ${PUID}:${PGID} #UID and GID
     environment:
       - TCB_BOT__DISCORD_TOKEN=
