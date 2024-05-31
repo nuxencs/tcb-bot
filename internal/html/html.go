@@ -19,10 +19,7 @@ import (
 )
 
 const (
-	WebsiteURL = "https://tcbscans.com"
-
-	// WebsiteURLBackup use backup URL for the time being
-	WebsiteURLBackup = "https://tcb-backup.bihar-mirchi.com"
+	WebsiteURL = "https://tcbscans.me"
 )
 
 type Collector struct {
@@ -40,7 +37,7 @@ func NewCollector(log logger.Logger, cfg *config.AppConfig, bot *discord.Bot, db
 		colly.UserAgent("Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Googlebot/2.1; +http://www.google.com/bot.html) Chrome/124.0.6367.61 Safari/537.36"),
 
 		// don't restrict allowed domains for the time being
-		// colly.AllowedDomains("tcbscans.com"),
+		// colly.AllowedDomains("tcbscans.me"),
 	)
 
 	collector.SetRequestTimeout(120 * time.Second)
@@ -60,7 +57,7 @@ func (coll *Collector) Run() error {
 	})
 
 	coll.log.Trace().Msg("Checking new releases for titles matching watched mangas...")
-	err := coll.cl.Visit(WebsiteURLBackup)
+	err := coll.cl.Visit(WebsiteURL)
 	if err != nil {
 		return err
 	}
