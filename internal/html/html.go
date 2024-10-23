@@ -92,7 +92,7 @@ func (co *Collector) processHTMLElement(e *colly.HTMLElement) {
 
 	chapterTitle := e.ChildText("div.mb-3 > div")
 	if chapterTitle == "" {
-		co.log.Error().Str("chapter", releaseTitle).Msg("error finding value for chapterTitle")
+		co.log.Debug().Str("chapter", releaseTitle).Msg("could not find value for chapterTitle")
 	}
 
 	releaseTime := e.ChildAttr("time-ago", "datetime")
