@@ -13,7 +13,6 @@ require (
 	github.com/spf13/viper v1.19.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.33.1
-)
 
 require (
 	github.com/PuerkitoBio/goquery v1.10.0 // indirect
