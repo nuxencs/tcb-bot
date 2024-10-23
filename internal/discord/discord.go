@@ -14,7 +14,7 @@ type Bot struct {
 	discord *discordgo.Session
 }
 
-func NewBot(log logger.Logger, cfg *config.AppConfig) *Bot {
+func New(log logger.Logger, cfg *config.AppConfig) *Bot {
 	return &Bot{
 		log: log.With().Str("module", "discord-bot").Logger(),
 		cfg: cfg,
@@ -24,32 +24,55 @@ func NewBot(log logger.Logger, cfg *config.AppConfig) *Bot {
 func (bot *Bot) Open() error {
 	var err error
 
-	bot.log.Info().Msg("Logging in using the provided bot token...")
+	bot.log.Info().Msg("logging in using the provided bot token...")
 
 	bot.discord, err = discordgo.New("Bot " + bot.cfg.Config.DiscordToken)
 	if err != nil {
 		return err
 	}
-	bot.log.Info().Msg("Successfully logged in")
+	bot.log.Info().Msg("successfully logged in")
 
-	bot.log.Debug().Msg("Creating websocket connection...")
+	bot.log.Debug().Msg("creating websocket connection...")
 	err = bot.discord.Open()
 	if err != nil {
 		return err
 	}
-	bot.log.Debug().Msg("Successfully created websocket connection")
+	bot.log.Debug().Msg("successfully created websocket connection")
 
 	err = bot.discord.UpdateCustomStatus("Watching TCB Scans")
 	if err != nil {
 		return err
 	}
-	bot.log.Debug().Msg("Successfully updated custom status")
+	bot.log.Trace().Msg("successfully updated custom status")
 
 	return nil
 }
 
-func (bot *Bot) SendDiscordNotification(title string, description string, url string, footer string, color int) {
-	_, err := bot.discord.ChannelMessageSendEmbed(bot.cfg.Config.DiscordChannelID, &discordgo.MessageEmbed{
+func (bot *Bot) Close() error {
+	err := bot.discord.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (bot *Bot) SendNotification(title, description, url, footer string, color int) error {
+	return bot.sendNotification(false, title, description, url, footer, color)
+}
+
+func (bot *Bot) SendErrorNotification(title, description string, color int) error {
+	return bot.sendNotification(true, title, description, "", "", color)
+}
+
+func (bot *Bot) sendNotification(isError bool, title, description, url, footer string, color int) error {
+	channelId := bot.cfg.Config.DiscordChannelID
+
+	if isError {
+		channelId = bot.cfg.Config.DiscordErrorChannelID
+	}
+
+	_, err := bot.discord.ChannelMessageSendEmbed(channelId, &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
 		URL:         url,
@@ -59,6 +82,8 @@ func (bot *Bot) SendDiscordNotification(title string, description string, url st
 		Color: color,
 	})
 	if err != nil {
-		bot.log.Fatal().Err(err).Msg("Error sending Discord notification")
+		return err
 	}
+
+	return nil
 }

@@ -1,8 +1,8 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"tcb-bot/internal/config"
-	"tcb-bot/internal/database"
+	"tcb-bot/internal/db"
 	"tcb-bot/internal/discord"
 	"tcb-bot/internal/html"
 	"tcb-bot/internal/logger"
 
-	"github.com/go-co-op/gocron/v2"
+	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 )
 
@@ -54,148 +54,19 @@ func init() {
 
 func main() {
 	var configPath string
-	var lastError string
 
 	pflag.StringVarP(&configPath, "config", "c", "", "Specifies the path for the config file.")
 	pflag.Parse()
 
 	switch cmd := pflag.Arg(0); cmd {
 	case "version":
-		fmt.Printf("Version: %v\nCommit: %v\n", version, commit)
-
-		// get the latest release tag from api
-		client := http.Client{
-			Timeout: 10 * time.Second,
-		}
-
-		resp, err := client.Get("https://api.github.com/repos/nuxencs/tcb-bot/releases/latest")
+		err := commandVersion()
 		if err != nil {
-			if errors.Is(err, http.ErrHandlerTimeout) {
-				fmt.Println("Server timed out while fetching latest release from api")
-			} else {
-				fmt.Printf("Failed to fetch latest release from api: %v\n", err)
-			}
-			os.Exit(1)
+			fmt.Printf("Got error from version check: %v\n", err)
 		}
-		defer resp.Body.Close()
-
-		// api returns 500 instead of 404 here
-		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusInternalServerError {
-			fmt.Print("No release found")
-			os.Exit(1)
-		}
-
-		var rel struct {
-			TagName string `json:"tag_name"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
-			fmt.Printf("Failed to decode response from api: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("Latest release: %v\n", rel.TagName)
 
 	case "start":
-		// read config
-		cfg := config.New(configPath, version)
-
-		// init new logger
-		log := logger.New(cfg.Config)
-
-		if err := cfg.UpdateConfig(); err != nil {
-			log.Error().Err(err).Msgf("error updating config")
-		}
-
-		// init dynamic config
-		cfg.DynamicReload(log)
-
-		// init new db
-		db := database.NewDB(log, cfg)
-		if err := db.Open(); err != nil {
-			log.Fatal().Err(err).Msg("error opening db connection")
-		}
-
-		log.Info().Msgf("Starting tcb-bot")
-		log.Info().Msgf("Version: %s", version)
-		log.Info().Msgf("Commit: %s", commit)
-		log.Info().Msgf("Build date: %s", date)
-		log.Info().Msgf("Log-level: %s", cfg.Config.LogLevel)
-
-		// init new discord bot
-		bot := discord.NewBot(log, cfg)
-		if err := bot.Open(); err != nil {
-			log.Fatal().Err(err).Msg("error opening discord session")
-		}
-
-		// load collected chapters
-		db.LoadCollectedChapters()
-
-		// init new collector
-		c := html.NewCollector(log, cfg, bot, db)
-
-		// init new scheduler
-		s, err := gocron.NewScheduler()
-		if err != nil {
-			log.Error().Err(err).Msg("error creating scheduler")
-			os.Exit(1)
-		}
-
-		// init new job
-		_, err = s.NewJob(
-			gocron.CronJob(
-				fmt.Sprintf("*/%d * * * *", cfg.Config.SleepTimer),
-				false,
-			),
-			gocron.NewTask(
-				func() {
-					err := c.Run()
-					if err != nil {
-						log.Error().Err(err).Msg("error collecting chapters")
-						currentError := fmt.Sprintf("Unexpected error occurred: %v", err)
-						if currentError != lastError {
-							bot.SendDiscordNotification("Error collecting chapters", currentError,
-								"", "", 10038562)
-							lastError = currentError
-						}
-					} else if lastError != "" {
-						log.Info().Msg("error has been resolved")
-						bot.SendDiscordNotification("Error resolved", "The previous error has been resolved",
-							"", "", 15105570)
-						lastError = ""
-					}
-				},
-			),
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("error creating task")
-			os.Exit(1)
-		}
-
-		s.Start()
-
-		// Set up a channel to catch signals for graceful shutdown
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
-
-		select {
-		case sig := <-sigCh:
-			log.Info().Msgf("received signal: %q, shutting down bot.", sig.String())
-		}
-
-		// save collected chapters
-		db.SaveCollectedChapters()
-		if err := db.Close(); err != nil {
-			log.Error().Err(err).Msg("error closing db connection")
-			os.Exit(1)
-		}
-
-		// shut down scheduler
-		err = s.Shutdown()
-		if err != nil {
-			log.Error().Err(err).Msg("error shutting down scheduler")
-			os.Exit(1)
-		}
-
-		os.Exit(0)
+		commandStart(configPath)
 
 	default:
 		pflag.Usage()
@@ -203,4 +74,139 @@ func main() {
 			os.Exit(0)
 		}
 	}
+}
+
+func commandVersion() error {
+	fmt.Printf("Version: %v\nCommit: %v\nBuild date: %v", version, commit, date)
+
+	// get the latest release tag from api
+	client := http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://api.github.com/repos/nuxencs/tcb-bot/releases/latest", nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.Is(err, http.ErrHandlerTimeout) {
+			return errors.Wrap(err, "Server timed out while fetching latest release from api")
+		}
+
+		return errors.Wrap(err, "Failed to fetch latest release from api: %v")
+	}
+	defer resp.Body.Close()
+
+	// api returns 500 instead of 404 here
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusInternalServerError {
+		return errors.New("No release found")
+	}
+
+	var rel struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
+		return errors.Wrap(err, "Failed to decode response from api: %v")
+	}
+	fmt.Printf("Latest release: %v\n", rel.TagName)
+
+	return nil
+}
+
+func commandStart(configPath string) {
+	// read config
+	cfg := config.New(configPath, version)
+
+	// init new logger
+	log := logger.New(cfg.Config)
+
+	if err := cfg.UpdateConfig(); err != nil {
+		log.Error().Err(err).Msgf("error updating config")
+	}
+
+	// init dynamic config
+	cfg.DynamicReload(log)
+
+	// init new database
+	database := db.NewHandler(log, cfg)
+	if err := database.Open(); err != nil {
+		log.Fatal().Err(err).Msg("error opening database connection")
+	}
+
+	log.Info().Msgf("Starting tcb-bot")
+	log.Info().Msgf("Version: %s", version)
+	log.Info().Msgf("Commit: %s", commit)
+	log.Info().Msgf("Build date: %s", date)
+	log.Info().Msgf("Log-level: %s", cfg.Config.LogLevel)
+
+	// init new discord bot
+	bot := discord.New(log, cfg)
+	if err := bot.Open(); err != nil {
+		log.Fatal().Err(err).Msg("error opening discord session")
+	}
+
+	// load collected chapters
+	err := database.LoadChapters()
+	if err != nil {
+		log.Fatal().Err(err).Msg("error loading collected chapters")
+	}
+
+	// init new collector
+	c := html.NewCollector(log, cfg, bot, database)
+
+	var lastError string
+
+	go func() {
+		for {
+			err := c.Run()
+			if err != nil {
+				log.Error().Err(err).Msg("error collecting chapters")
+				currentError := fmt.Sprintf("Unexpected error occurred: %v", err)
+
+				if currentError != lastError {
+					err := bot.SendErrorNotification("Error collecting chapters", currentError, 10038562)
+					if err != nil {
+						log.Error().Err(err).Msg("error sending discord notification")
+					}
+
+					lastError = currentError
+				}
+			} else if lastError != "" {
+				log.Info().Msg("error has been resolved")
+				err := bot.SendErrorNotification("Error resolved", "The previous error has been resolved", 15105570)
+				if err != nil {
+					log.Error().Err(err).Msg("error sending discord notification")
+				}
+
+				lastError = ""
+			}
+
+			time.Sleep(time.Duration(cfg.Config.SleepTimer) * time.Minute)
+		}
+	}()
+
+	// set up a channel to catch signals for graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
+
+	select {
+	case sig := <-sigCh:
+		log.Info().Msgf("received signal: %s, shutting down bot.", sig)
+	}
+
+	// close discord bot connection
+	if err := bot.Close(); err != nil {
+		log.Error().Err(err).Msg("error closing discord bot connection")
+		os.Exit(1)
+	}
+
+	// close database connection
+	if err := database.Close(); err != nil {
+		log.Error().Err(err).Msg("error closing database connection")
+		os.Exit(1)
+	}
+
+	os.Exit(0)
 }
