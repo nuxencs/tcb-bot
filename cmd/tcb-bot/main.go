@@ -166,7 +166,7 @@ func commandStart(configPath string) {
 				currentError := fmt.Sprintf("Unexpected error occurred: %v", err)
 
 				if currentError != lastError {
-					err := bot.SendErrorNotification("Error collecting chapters", currentError, 10038562)
+					err := bot.SendErrorNotification(currentError)
 					if err != nil {
 						log.Error().Err(err).Msg("error sending discord notification")
 					}
@@ -175,7 +175,7 @@ func commandStart(configPath string) {
 				}
 			} else if lastError != "" {
 				log.Info().Msg("error has been resolved")
-				err := bot.SendErrorNotification("Error resolved", "The previous error has been resolved", 15105570)
+				err := bot.SendResolvedNotification()
 				if err != nil {
 					log.Error().Err(err).Msg("error sending discord notification")
 				}

@@ -26,12 +26,12 @@ const (
 type Collector struct {
 	log zerolog.Logger
 	cfg *config.AppConfig
-	bot *discord.Bot
+	bot *discord.Discord
 	db  *db.Handler
 	c   *colly.Collector
 }
 
-func NewCollector(log logger.Logger, cfg *config.AppConfig, bot *discord.Bot, db *db.Handler) *Collector {
+func NewCollector(log logger.Logger, cfg *config.AppConfig, bot *discord.Discord, db *db.Handler) *Collector {
 	log.Trace().Msg("creating new collector")
 	collector := colly.NewCollector(
 		colly.AllowURLRevisit(),
@@ -78,34 +78,30 @@ func (co *Collector) processHTMLElement(e *colly.HTMLElement) {
 		return
 	}
 
-	co.log.UpdateContext(func(c zerolog.Context) zerolog.Context {
-		return c.Str("chapter", releaseTitle)
-	})
-
 	releaseLink := e.ChildAttr("a.text-white.text-lg.font-bold", "href")
 	if releaseLink == "" {
-		co.log.Error().Msg("error finding value for releaseLink")
+		co.log.Error().Str("chapter", releaseTitle).Msg("error finding value for releaseLink")
 		return
 	}
 
-	co.log.Trace().Msg("validating scraped release link")
+	co.log.Trace().Str("chapter", releaseTitle).Msg("validating scraped release link")
 	if !utils.IsValidReleaseLink(releaseLink) {
-		co.log.Error().Msg("error validating releaseLink")
+		co.log.Error().Str("chapter", releaseTitle).Msg("error validating releaseLink")
 		return
 	}
 
 	chapterTitle := e.ChildText("div.mb-3 > div")
 	if chapterTitle == "" {
-		co.log.Error().Msg("error finding value for chapterTitle")
+		co.log.Error().Str("chapter", releaseTitle).Msg("error finding value for chapterTitle")
 	}
 
 	releaseTime := e.ChildAttr("time-ago", "datetime")
 	if releaseTime == "" {
-		co.log.Error().Msg("error finding value for releaseTime")
+		co.log.Error().Str("chapter", releaseTitle).Msg("error finding value for releaseTime")
 		return
 	}
 
-	co.log.Debug().Msgf("found: releaseTitle( %s ) // releaseLink( %s ) // chapterTitle( %s ) // releaseTime( %s )",
+	co.log.Debug().Str("chapter", releaseTitle).Msgf("found: releaseTitle( %s ) // releaseLink( %s ) // chapterTitle( %s ) // releaseTime( %s )",
 		releaseTitle, releaseLink, chapterTitle, releaseTime)
 
 	// unescape HTML entities
@@ -114,30 +110,30 @@ func (co *Collector) processHTMLElement(e *colly.HTMLElement) {
 
 	mangaTitle, chapterNumber, err := splitReleaseTitle(releaseTitle)
 	if err != nil {
-		co.log.Error().Msg("error splitting release title")
+		co.log.Error().Str("chapter", releaseTitle).Msg("error splitting release title")
 	}
 
 	assembledTitle := fmt.Sprintf("%s Chapter %s", mangaTitle, chapterNumber)
 
-	co.log.Trace().Msg("checking if manga is on watchlist")
+	co.log.Trace().Str("chapter", releaseTitle).Msg("checking if manga is on watchlist")
 	if !slices.Contains(co.cfg.Config.WatchedMangas, mangaTitle) {
-		co.log.Debug().Msg("manga is not on watchlist, skipping release")
+		co.log.Debug().Str("chapter", releaseTitle).Msg("manga is not on watchlist, skipping release")
 		return
 	}
 
-	co.log.Trace().Msg("checking if chapter was already collected")
+	co.log.Trace().Str("chapter", releaseTitle).Msg("checking if chapter was already collected")
 	_, ok := db.CollectedChapters.Load(assembledTitle)
 	if ok {
-		co.log.Trace().Msg("chapter was already collected, not sending notification")
+		co.log.Trace().Str("chapter", releaseTitle).Msg("chapter was already collected, not sending notification")
 		return
 	}
 
 	formattedTime, err := utils.ParseAndConvertTime(releaseTime, time.RFC3339, "Europe/Berlin", time.RFC1123)
 	if err != nil {
-		co.log.Error().Err(err).Msg("error parsing release time")
+		co.log.Error().Err(err).Str("chapter", releaseTitle).Msg("error parsing release time")
 	}
 
-	co.log.Trace().Msg("adding chapter to collected chapters")
+	co.log.Trace().Str("chapter", releaseTitle).Msg("adding chapter to collected chapters")
 	newChapter := db.CollectedChapter{
 		Releasetitle:  assembledTitle,
 		Releaselink:   releaseLink,
@@ -157,14 +153,13 @@ func (co *Collector) processHTMLElement(e *colly.HTMLElement) {
 	}
 
 	// send notification to discord
-	co.log.Trace().Msg("sending notification to discord")
+	co.log.Trace().Str("chapter", releaseTitle).Msg("sending notification to discord")
 	go func() {
-		err = co.bot.SendNotification(newChapter.Mangatitle, desc, WebsiteURL+newChapter.Releaselink,
-			"Released at "+newChapter.Releasetime, 3447003)
+		err = co.bot.SendNotification(newChapter.Mangatitle, desc, WebsiteURL+newChapter.Releaselink, newChapter.Releasetime)
 		if err != nil {
-			co.log.Error().Err(err).Msg("error sending discord notification")
+			co.log.Error().Err(err).Str("chapter", releaseTitle).Msg("error sending discord notification")
 		}
-		co.log.Info().Msgf("sent notification for: %q", assembledTitle)
+		co.log.Info().Str("chapter", releaseTitle).Msgf("sent notification for: %q", assembledTitle)
 	}()
 }
 

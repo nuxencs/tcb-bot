@@ -8,48 +8,48 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type Bot struct {
+type Discord struct {
 	log     zerolog.Logger
 	cfg     *config.AppConfig
-	discord *discordgo.Session
+	session *discordgo.Session
 }
 
-func New(log logger.Logger, cfg *config.AppConfig) *Bot {
-	return &Bot{
-		log: log.With().Str("module", "discord-bot").Logger(),
+func New(log logger.Logger, cfg *config.AppConfig) *Discord {
+	return &Discord{
+		log: log.With().Str("module", "discord").Logger(),
 		cfg: cfg,
 	}
 }
 
-func (bot *Bot) Open() error {
+func (d *Discord) Open() error {
 	var err error
 
-	bot.log.Info().Msg("logging in using the provided bot token...")
+	d.log.Info().Msg("logging in using the provided bot token...")
 
-	bot.discord, err = discordgo.New("Bot " + bot.cfg.Config.DiscordToken)
+	d.session, err = discordgo.New("Bot " + d.cfg.Config.DiscordToken)
 	if err != nil {
 		return err
 	}
-	bot.log.Info().Msg("successfully logged in")
+	d.log.Info().Msg("successfully logged in")
 
-	bot.log.Debug().Msg("creating websocket connection...")
-	err = bot.discord.Open()
+	d.log.Debug().Msg("creating websocket connection...")
+	err = d.session.Open()
 	if err != nil {
 		return err
 	}
-	bot.log.Debug().Msg("successfully created websocket connection")
+	d.log.Debug().Msg("successfully created websocket connection")
 
-	err = bot.discord.UpdateCustomStatus("Watching TCB Scans")
+	err = d.session.UpdateCustomStatus("Watching TCB Scans")
 	if err != nil {
 		return err
 	}
-	bot.log.Trace().Msg("successfully updated custom status")
+	d.log.Trace().Msg("successfully updated custom status")
 
 	return nil
 }
 
-func (bot *Bot) Close() error {
-	err := bot.discord.Close()
+func (d *Discord) Close() error {
+	err := d.session.Close()
 	if err != nil {
 		return err
 	}
@@ -57,27 +57,28 @@ func (bot *Bot) Close() error {
 	return nil
 }
 
-func (bot *Bot) SendNotification(title, description, url, footer string, color int) error {
-	return bot.sendNotification(false, title, description, url, footer, color)
+func (d *Discord) SendNotification(title, description, url, timestamp string) error {
+	return d.sendNotification(d.cfg.Config.DiscordChannelID, title, description, url,
+		"Released at "+timestamp, 3447003)
 }
 
-func (bot *Bot) SendErrorNotification(title, description string, color int) error {
-	return bot.sendNotification(true, title, description, "", "", color)
+func (d *Discord) SendErrorNotification(error string) error {
+	return d.sendNotification(d.cfg.Config.DiscordErrorChannelID, "Error collecting chapters",
+		error, "", "", 10038562)
 }
 
-func (bot *Bot) sendNotification(isError bool, title, description, url, footer string, color int) error {
-	channelId := bot.cfg.Config.DiscordChannelID
+func (d *Discord) SendResolvedNotification() error {
+	return d.sendNotification(d.cfg.Config.DiscordErrorChannelID, "Error resolved",
+		"The previous error has been resolved", "", "", 15105570)
+}
 
-	if isError {
-		channelId = bot.cfg.Config.DiscordErrorChannelID
-	}
-
-	_, err := bot.discord.ChannelMessageSendEmbed(channelId, &discordgo.MessageEmbed{
+func (d *Discord) sendNotification(channelId string, title, description, url, timestamp string, color int) error {
+	_, err := d.session.ChannelMessageSendEmbed(channelId, &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
 		URL:         url,
 		Footer: &discordgo.MessageEmbedFooter{
-			Text: footer,
+			Text: timestamp,
 		},
 		Color: color,
 	})
