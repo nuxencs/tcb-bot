@@ -1,5 +1,5 @@
 # build base
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine3.19 AS app-base
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine3.20 AS app-base
 
 WORKDIR /src
 
@@ -25,7 +25,7 @@ RUN --network=none --mount=target=. \
     go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${REVISION} -X main.date=${BUILDTIME}" -o /out/bin/tcb-bot cmd/tcb-bot/main.go
 
 # build runner
-FROM alpine:latest as RUNNER
+FROM alpine:latest AS RUNNER
 RUN apk add --no-cache ca-certificates curl tzdata jq
 
 LABEL org.opencontainers.image.source = "https://github.com/nuxencs/tcb-bot" \

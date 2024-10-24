@@ -36,6 +36,12 @@ discordToken = ""
 #
 discordChannelID = ""
 
+# Discord Error Channel ID
+#
+# Default: ""
+#
+discordErrorChannelID = ""
+
 # Collected Chapters Database File
 # Make sure to use forward slashes and include the filename with extension. e.g. "database/collected_chapters.db"
 #
@@ -137,31 +143,39 @@ func New(configPath string, version string) *AppConfig {
 		m: new(sync.Mutex),
 	}
 	c.defaults()
-	c.Config.Version = version
-	c.Config.ConfigPath = configPath
+	c.Config = &domain.Config{
+		Version:    version,
+		ConfigPath: configPath,
+	}
 
 	c.load(configPath)
 	c.loadFromEnv()
 
-	if c.Config.DiscordToken == "" || c.Config.DiscordChannelID == "" || c.Config.CollectedChaptersDB == "" {
-		log.Fatal("discordToken, discordChannelID & collectedChaptersDB must be provided in the config.toml file.")
+	switch {
+	case c.Config.DiscordToken == "":
+		log.Fatal("discordToken must be provided in the config.toml file.")
+	case c.Config.DiscordChannelID == "":
+		log.Fatal("discordChannelID must be provided in the config.toml file.")
+	case c.Config.DiscordErrorChannelID == "":
+		log.Fatal("discordErrorChannelID must be provided in the config.toml file.")
+	case c.Config.CollectedChaptersDB == "":
+		log.Fatal("collectedChaptersDB must be provided in the config.toml file.")
 	}
 
 	return c
 }
 
 func (c *AppConfig) defaults() {
-	c.Config = &domain.Config{
-		DiscordToken:        "",
-		DiscordChannelID:    "",
-		CollectedChaptersDB: "",
-		LogLevel:            "DEBUG",
-		LogPath:             "",
-		LogMaxSize:          50,
-		LogMaxBackups:       3,
-		WatchedMangas:       []string{"One Piece", "Jujutsu Kaisen"},
-		SleepTimer:          15,
-	}
+	viper.SetDefault("discordToken", "")
+	viper.SetDefault("discordChannelID", "")
+	viper.SetDefault("discordErrorChannelID", "")
+	viper.SetDefault("collectedChaptersDB", "")
+	viper.SetDefault("logPath", "")
+	viper.SetDefault("LogLevel", "DEBUG")
+	viper.SetDefault("logMaxSize", 50)
+	viper.SetDefault("logMaxBackups", 3)
+	viper.SetDefault("watchedMangas", []string{"One Piece", "Jujutsu Kaisen"})
+	viper.SetDefault("sleepTimer", 15)
 }
 
 func (c *AppConfig) loadFromEnv() {
@@ -178,6 +192,8 @@ func (c *AppConfig) loadFromEnv() {
 					c.Config.DiscordToken = envPair[1]
 				case prefix + "DISCORD_CHANNEL_ID":
 					c.Config.DiscordChannelID = envPair[1]
+				case prefix + "DISCORD_ERROR_CHANNEL_ID":
+					c.Config.DiscordErrorChannelID = envPair[1]
 				case prefix + "COLLECTED_CHAPTERS_DB":
 					c.Config.CollectedChaptersDB = envPair[1]
 				case prefix + "LOG_LEVEL":
@@ -238,8 +254,11 @@ func (c *AppConfig) load(configPath string) {
 }
 
 func (c *AppConfig) DynamicReload(log logger.Logger) {
+	viper.WatchConfig()
+
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		c.m.Lock()
+		defer c.m.Unlock()
 
 		logLevel := viper.GetString("logLevel")
 		c.Config.LogLevel = logLevel
@@ -253,11 +272,7 @@ func (c *AppConfig) DynamicReload(log logger.Logger) {
 
 		log.Debug().Msg("config file reloaded!")
 
-		c.m.Unlock()
 	})
-	viper.WatchConfig()
-
-	return
 }
 
 func (c *AppConfig) UpdateConfig() error {
@@ -272,7 +287,7 @@ func (c *AppConfig) UpdateConfig() error {
 	lines = c.processLines(lines)
 
 	output := strings.Join(lines, "\n")
-	if err := os.WriteFile(filePath, []byte(output), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(output), 0o644); err != nil {
 		return errors.Wrap(err, "could not write config file: %s", filePath)
 	}
 
@@ -282,11 +297,16 @@ func (c *AppConfig) UpdateConfig() error {
 func (c *AppConfig) processLines(lines []string) []string {
 	// keep track of not found values to append at bottom
 	var (
-		foundLineLogLevel = false
-		foundLineLogPath  = false
+		foundLineLogLevel          = false
+		foundLineLogPath           = false
+		foundDiscordErrorChannelID = false
 	)
 
 	for i, line := range lines {
+		if !foundDiscordErrorChannelID && strings.Contains(line, "discordErrorChannelID =") {
+			lines[i] = fmt.Sprintf(`discordErrorChannelID = "%s"`, c.Config.DiscordErrorChannelID)
+			foundDiscordErrorChannelID = true
+		}
 		if !foundLineLogLevel && strings.Contains(line, "logLevel =") {
 			lines[i] = fmt.Sprintf(`logLevel = "%s"`, c.Config.LogLevel)
 			foundLineLogLevel = true
@@ -299,6 +319,14 @@ func (c *AppConfig) processLines(lines []string) []string {
 			}
 			foundLineLogPath = true
 		}
+	}
+
+	if !foundDiscordErrorChannelID {
+		lines = append(lines, "# Discord Error Channel ID")
+		lines = append(lines, "#")
+		lines = append(lines, `# Default: ""`)
+		lines = append(lines, "#")
+		lines = append(lines, fmt.Sprintf(`discordErrorChannelID = "%s"`, c.Config.DiscordErrorChannelID))
 	}
 
 	if !foundLineLogLevel {

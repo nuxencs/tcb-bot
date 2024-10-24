@@ -12,6 +12,12 @@ discordToken = ""
 #
 discordChannelID = ""
 
+# Discord Error Channel ID
+#
+# Default: ""
+#
+discordErrorChannelID = ""
+
 # Collected Chapters Database File
 # Make sure to use forward slashes and include the filename with extension. e.g. "database/collected_chapters.db"
 #
