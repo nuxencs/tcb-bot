@@ -156,34 +156,39 @@ func commandStart(configPath string) {
 	// init new collector
 	c := html.NewCollector(log, cfg, bot, database)
 
+	ticker := time.NewTicker(time.Duration(cfg.Config.SleepTimer) * time.Minute)
+	done := make(chan bool)
 	var lastError string
 
 	go func() {
 		for {
-			err := c.Run()
-			if err != nil {
-				log.Error().Err(err).Msg("error collecting chapters")
-				currentError := fmt.Sprintf("Unexpected error occurred: %v", err)
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				err := c.Run()
+				if err != nil {
+					log.Error().Err(err).Msg("error collecting chapters")
+					currentError := fmt.Sprintf("Unexpected error occurred: %v", err)
 
-				if currentError != lastError {
-					err := bot.SendErrorNotification(currentError)
+					if currentError != lastError {
+						err := bot.SendErrorNotification(currentError)
+						if err != nil {
+							log.Error().Err(err).Msg("error sending discord notification")
+						}
+
+						lastError = currentError
+					}
+				} else if lastError != "" {
+					log.Info().Msg("error has been resolved")
+					err := bot.SendResolvedNotification()
 					if err != nil {
 						log.Error().Err(err).Msg("error sending discord notification")
 					}
 
-					lastError = currentError
+					lastError = ""
 				}
-			} else if lastError != "" {
-				log.Info().Msg("error has been resolved")
-				err := bot.SendResolvedNotification()
-				if err != nil {
-					log.Error().Err(err).Msg("error sending discord notification")
-				}
-
-				lastError = ""
 			}
-
-			time.Sleep(time.Duration(cfg.Config.SleepTimer) * time.Minute)
 		}
 	}()
 
@@ -193,6 +198,8 @@ func commandStart(configPath string) {
 
 	select {
 	case sig := <-sigCh:
+		ticker.Stop()
+		done <- true
 		log.Info().Msgf("received signal: %s, shutting down bot.", sig)
 	}
 
