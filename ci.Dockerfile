@@ -25,12 +25,12 @@ RUN --network=none --mount=target=. \
     go build -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${REVISION} -X main.date=${BUILDTIME}" -o /out/bin/tcb-bot cmd/tcb-bot/main.go
 
 # build runner
-FROM alpine:latest AS RUNNER
+FROM alpine:latest AS runner
 RUN apk add --no-cache ca-certificates curl tzdata jq
 
-LABEL org.opencontainers.image.source = "https://github.com/nuxencs/tcb-bot" \
-      org.opencontainers.image.licenses = "MIT" \
-      org.opencontainers.image.base.name = "alpine:latest"
+LABEL org.opencontainers.image.source="https://github.com/nuxencs/tcb-bot" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.base.name="alpine:latest"
 
 ENV HOME="/config" \
     XDG_CONFIG_HOME="/config" \
