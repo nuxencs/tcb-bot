@@ -271,7 +271,6 @@ func (c *AppConfig) DynamicReload(log logger.Logger) {
 		c.Config.WatchedMangas = watchedMangas
 
 		log.Debug().Msg("config file reloaded!")
-
 	})
 }
 

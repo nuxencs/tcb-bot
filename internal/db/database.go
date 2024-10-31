@@ -16,9 +16,7 @@ import (
 //go:embed schema.sql
 var schema string
 
-var (
-	CollectedChapters = xsync.NewMapOf[string, CollectedChapter]()
-)
+var CollectedChapters = xsync.NewMapOf[string, CollectedChapter]()
 
 type Handler struct {
 	log zerolog.Logger
