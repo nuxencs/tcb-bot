@@ -2,7 +2,6 @@ package html
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"html"
 	"slices"
 	"strings"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/gocolly/colly"
 	"github.com/gocolly/colly/extensions"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 

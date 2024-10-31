@@ -8,6 +8,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	SuccessColor  = 0x3498db
+	ErrorColor    = 0x992d22
+	ResolvedColor = 0xe67e22
+)
+
 type Discord struct {
 	log     zerolog.Logger
 	cfg     *config.AppConfig
@@ -59,17 +65,17 @@ func (d *Discord) Close() error {
 
 func (d *Discord) SendNotification(title, description, url, timestamp string) error {
 	return d.sendNotification(d.cfg.Config.DiscordChannelID, title, description, url,
-		"Released at "+timestamp, 3447003)
+		"Released at "+timestamp, SuccessColor)
 }
 
 func (d *Discord) SendErrorNotification(error string) error {
 	return d.sendNotification(d.cfg.Config.DiscordErrorChannelID, "Error collecting chapters",
-		error, "", "", 10038562)
+		error, "", "", ErrorColor)
 }
 
 func (d *Discord) SendResolvedNotification() error {
 	return d.sendNotification(d.cfg.Config.DiscordErrorChannelID, "Error resolved",
-		"The previous error has been resolved", "", "", 15105570)
+		"The previous error has been resolved", "", "", ResolvedColor)
 }
 
 func (d *Discord) sendNotification(channelId string, title, description, url, timestamp string, color int) error {
