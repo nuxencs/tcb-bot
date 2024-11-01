@@ -1,17 +1,16 @@
 module tcb-bot
 
 go 1.22.1
-
 require (
-	github.com/autobrr/autobrr v1.45.0
+	github.com/autobrr/autobrr v1.48.0
 	github.com/bwmarrin/discordgo v0.28.1
-	github.com/fsnotify/fsnotify v1.7.0
-	github.com/go-co-op/gocron/v2 v2.11.0
+	github.com/fsnotify/fsnotify v1.8.0
+	github.com/go-co-op/gocron/v2 v2.12.3
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	modernc.org/sqlite v1.32.0
+	modernc.org/sqlite v1.33.1
 )
 
 require (
@@ -43,13 +42,13 @@ require (
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
-	github.com/spf13/cast v1.6.0 // indirect
+	github.com/spf13/cast v1.7.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
-	golang.org/x/net v0.28.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
+	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948 // indirect
+	golang.org/x/net v0.30.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
@@ -65,6 +64,6 @@ require (
 require (
 	github.com/gocolly/colly v1.2.0
 	github.com/gorilla/websocket v1.5.1 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
+	golang.org/x/crypto v0.28.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
 )
