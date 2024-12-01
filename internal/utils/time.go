@@ -2,7 +2,7 @@ package utils
 
 import "time"
 
-func ParseAndConvertTime(releaseTime, givenFormat, wantedTimeZone, wantedFormat string) (string, error) {
+func ParseAndConvertTime(releaseTime, givenFormat, wantedTZ, wantedFormat string) (string, error) {
 	// Parse format of given release time
 	t, err := time.Parse(givenFormat, releaseTime)
 	if err != nil {
@@ -10,7 +10,7 @@ func ParseAndConvertTime(releaseTime, givenFormat, wantedTimeZone, wantedFormat 
 	}
 
 	// Convert to a specific time zone.
-	location, err := time.LoadLocation(wantedTimeZone)
+	location, err := time.LoadLocation(wantedTZ)
 	if err != nil {
 		return "", err
 	}
