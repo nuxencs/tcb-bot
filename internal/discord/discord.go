@@ -14,20 +14,20 @@ const (
 	ResolvedColor = 0xe67e22
 )
 
-type Discord struct {
+type Bot struct {
 	log     zerolog.Logger
 	cfg     *config.AppConfig
 	session *discordgo.Session
 }
 
-func New(log logger.Logger, cfg *config.AppConfig) *Discord {
-	return &Discord{
+func New(log logger.Logger, cfg *config.AppConfig) *Bot {
+	return &Bot{
 		log: log.With().Str("module", "discord").Logger(),
 		cfg: cfg,
 	}
 }
 
-func (d *Discord) Open() error {
+func (d *Bot) Open() error {
 	var err error
 
 	d.log.Info().Msg("logging in using the provided bot token...")
@@ -54,7 +54,7 @@ func (d *Discord) Open() error {
 	return nil
 }
 
-func (d *Discord) Close() error {
+func (d *Bot) Close() error {
 	err := d.session.Close()
 	if err != nil {
 		return err
@@ -63,22 +63,22 @@ func (d *Discord) Close() error {
 	return nil
 }
 
-func (d *Discord) SendNotification(title, description, url, timestamp string) error {
+func (d *Bot) SendNotification(title, description, url, timestamp string) error {
 	return d.sendNotification(d.cfg.Config.DiscordChannelID, title, description, url,
 		"Released at "+timestamp, SuccessColor)
 }
 
-func (d *Discord) SendErrorNotification(error string) error {
+func (d *Bot) SendErrorNotification(error string) error {
 	return d.sendNotification(d.cfg.Config.DiscordErrorChannelID, "Error collecting chapters",
 		error, "", "", ErrorColor)
 }
 
-func (d *Discord) SendResolvedNotification() error {
+func (d *Bot) SendResolvedNotification() error {
 	return d.sendNotification(d.cfg.Config.DiscordErrorChannelID, "Error resolved",
 		"The previous error has been resolved", "", "", ResolvedColor)
 }
 
-func (d *Discord) sendNotification(channelId string, title, description, url, timestamp string, color int) error {
+func (d *Bot) sendNotification(channelId string, title, description, url, timestamp string, color int) error {
 	_, err := d.session.ChannelMessageSendEmbed(channelId, &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,

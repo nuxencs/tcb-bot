@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
+	"tcb-bot/internal/collector"
 	"tcb-bot/internal/config"
 	"tcb-bot/internal/db"
 	"tcb-bot/internal/discord"
-	"tcb-bot/internal/html"
 	"tcb-bot/internal/logger"
 
 	"github.com/pkg/errors"
@@ -154,7 +154,7 @@ func commandStart(configPath string) {
 	}
 
 	// init new collector
-	c := html.NewCollector(log, cfg, bot, database)
+	c := collector.New(log, cfg, bot, database)
 
 	ticker := time.NewTicker(time.Duration(cfg.Config.SleepTimer) * time.Minute)
 	done := make(chan bool)
@@ -196,12 +196,9 @@ func commandStart(configPath string) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT, syscall.SIGTERM)
 
-	select {
-	case sig := <-sigCh:
-		ticker.Stop()
-		done <- true
-		log.Info().Msgf("received signal: %s, shutting down bot.", sig)
-	}
+	log.Info().Msgf("received signal: %s, shutting down bot.", <-sigCh)
+	ticker.Stop()
+	done <- true
 
 	// close discord bot connection
 	if err := bot.Close(); err != nil {

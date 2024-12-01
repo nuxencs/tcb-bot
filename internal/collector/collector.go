@@ -1,4 +1,4 @@
-package html
+package collector
 
 import (
 	"fmt"
@@ -26,12 +26,12 @@ const (
 type Collector struct {
 	log zerolog.Logger
 	cfg *config.AppConfig
-	bot *discord.Discord
+	bot *discord.Bot
 	db  *db.Handler
 	c   *colly.Collector
 }
 
-func NewCollector(log logger.Logger, cfg *config.AppConfig, bot *discord.Discord, db *db.Handler) *Collector {
+func New(log logger.Logger, cfg *config.AppConfig, bot *discord.Bot, db *db.Handler) *Collector {
 	log.Trace().Msg("creating new collector")
 	collector := colly.NewCollector(
 		colly.AllowURLRevisit(),
@@ -51,7 +51,7 @@ func NewCollector(log logger.Logger, cfg *config.AppConfig, bot *discord.Discord
 
 func (co *Collector) Run() error {
 	co.c.OnHTML("div.bg-card", func(e *colly.HTMLElement) {
-		co.processHTMLElement(e)
+		co.processElement(e)
 	})
 
 	co.log.Trace().Msg("checking new releases for titles matching watched mangas...")
@@ -63,7 +63,7 @@ func (co *Collector) Run() error {
 	return nil
 }
 
-func (co *Collector) processHTMLElement(e *colly.HTMLElement) {
+func (co *Collector) processElement(e *colly.HTMLElement) {
 	co.log.Debug().Msg("finding values for releaseTitle, releaseLink, chapterTitle and releaseTime")
 
 	releaseTitle := e.ChildText("a.text-white.text-lg.font-bold")
