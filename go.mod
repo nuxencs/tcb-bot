@@ -3,7 +3,7 @@ module tcb-bot
 go 1.23.2
 
 require (
-	github.com/autobrr/autobrr v1.51.1
+	github.com/autobrr/autobrr v1.56.1
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/fsnotify/fsnotify v1.8.0
 	github.com/pkg/errors v0.9.1
@@ -12,7 +12,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	modernc.org/sqlite v1.34.1
+	modernc.org/sqlite v1.34.4
 )
 
 require (
